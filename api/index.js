@@ -7,11 +7,8 @@ const client = new MercadoPagoConfig({
 });
 
 const app = express();
-const port = 3000;
-const corsOptions = {
-  origin: '*',
-  optionsSuccessStatus: 200,
-};
+
+app.use(express.static('public'));
 app.use(cors());
 app.use(express.json());
 app.use((req, res, next) => {
@@ -23,7 +20,9 @@ app.use((req, res, next) => {
   res.setHeader(
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  )
+    );
+    next();
+  });
 
 app.get('/', (req, res) => {
   res.send('Hello World!');
@@ -50,6 +49,4 @@ app.post('/create_preference', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
-});
+app.listen(3000, () => console.log('Server ready on port 3000.'));
