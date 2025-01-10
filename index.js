@@ -20,9 +20,9 @@ app.post('/create_preference', async (req, res) => {
     const body = {
       items: [
         {
-          title: 'Dummy Product',
-          unit_price: 100,
-          quantity: 1,
+          title: req.body.title,
+          unit_price: req.body.price,
+          quantity: req.body.quantity,
           currency_id: 'ARS',
         }
       ]
