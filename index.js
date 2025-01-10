@@ -8,15 +8,12 @@ const client = new MercadoPagoConfig({
 
 const app = express();
 const port = 3000;
-app.use(cors());
+const corsOptions = {
+  origin: '*',
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
 app.use(express.json());
-app.use((res, next) => {
-  // res.setHeader("Access-Control-Allow-Origin", process.env.ORIGIN_URL);
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, GET, PUT");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  next();
-})
 
 app.get('/', (req, res) => {
   res.send('Hello World!');
