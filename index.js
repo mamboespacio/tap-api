@@ -11,7 +11,8 @@ const port = 3000;
 app.use(cors());
 app.use(express.json());
 app.use((res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", process.env.ORIGIN_URL);
+  // res.setHeader("Access-Control-Allow-Origin", process.env.ORIGIN_URL);
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, PUT");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   next();
