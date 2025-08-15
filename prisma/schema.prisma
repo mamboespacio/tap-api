@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String
+  fullName  String?
+  dni       String?
+
+  orders    Order[]
+  addresses Address[]
+  favouriteVendors Vendor[] @relation("FavouriteVendors")
+
+  // dueño (opcional) de vendors
+  vendorsOwned Vendor[] @relation("VendorOwner")
+}
+
+model Vendor {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  address      String   @default("Av. Siempre Viva 742")
+  openingHours DateTime @default("1970-01-01T10:00:00.000Z")
+  closingHours DateTime @default("1970-01-01T18:00:00.000Z")
+
+  ownerId      Int                       // ← requerido
+  owner        User      @relation("VendorOwner", fields: [ownerId], references: [id])
+
+  products     Product[]
+  orders       Order[]
+  favouritedBy User[]   @relation("FavouriteVendors")
+  mpAccount    MpAccount?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+}
+
+
+model MpAccount {
+  id             Int      @id @default(autoincrement())
+  vendorId       Int      @unique
+  vendor         Vendor   @relation(fields: [vendorId], references: [id])
+  mpUserId       String
+  accessToken    String
+  refreshToken   String?
+  liveMode       Boolean  @default(true)
+  tokenExpiresAt DateTime?
+
+  @@index([mpUserId])
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  slug      String    @unique
+  products  Product[]
+}
+
+model Product {
+  id          Int         @id @default(autoincrement())
+  name        String      @unique
+  description String?
+  price       Float
+  vendorId    Int
+  vendor      Vendor      @relation(fields: [vendorId], references: [id])
+  categoryId  Int
+  category    Category    @relation(fields: [categoryId], references: [id])
+  orders      OrderProduct[]
+
+  @@index([vendorId])
+  @@index([categoryId])
+}
+
+model Order {
+  id            Int          @id @default(autoincrement())
+  userId        Int
+  user          User         @relation(fields: [userId], references: [id])
+
+  vendorId      Int
+  vendor        Vendor       @relation(fields: [vendorId], references: [id])
+
+  products      OrderProduct[]
+  price         Float
+
+  status        OrderStatus  @default(PENDING)
+  externalRef   String?
+  preferenceId  String?
+  paymentId     String?
+  marketplaceFee Float?
+
+  createdAt     DateTime     @default(now())
+
+  @@index([vendorId])
+  @@index([userId])
+  @@index([status])
+  @@index([preferenceId])
+  @@index([paymentId])
+}
+
+model OrderProduct {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  order     Order    @relation(fields: [orderId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Address {
+  id           Int      @id @default(autoincrement())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       Int      
+
+  name         String
+  fullAddress  String
+  latitude     Float
+  longitude    Float
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([latitude, longitude])
+}
