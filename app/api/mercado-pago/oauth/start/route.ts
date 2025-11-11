@@ -1,26 +1,40 @@
+// app/api/mercado-pago/oauth/start/route.ts
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import db from "@/lib/prisma";
 import crypto from "crypto";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const vendorId = searchParams.get("vendorId");
+function b64url(b: Buffer | string) {
+  const s = typeof b === "string" ? Buffer.from(b) : b;
+  return s.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/,"");
+}
 
-  if (!vendorId) {
-    return new Response(JSON.stringify({ error: "vendorId requerido" }), {
-      status: 400, headers: { "Content-Type": "application/json" },
-    });
+export async function GET(req: Request) {
+  const u = new URL(req.url);
+  const vendorId = Number(u.searchParams.get("vendorId"));
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return new Response("Unauthorized", { status: 401 });
+  if (!vendorId) return new Response("vendorId requerido", { status: 400 });
+
+  const vendor = await db.vendor.findUnique({ where: { id: vendorId } });
+  if (!vendor || vendor.ownerId !== Number(session.user.id)) {
+    return new Response("Vendor inválido", { status: 403 });
   }
 
-  const state = Buffer.from(JSON.stringify({
-    v: vendorId,
-    n: crypto.randomBytes(8).toString("hex"),
-  })).toString("base64");
+  // Firmar state
+  const stateData = { v: vendorId, t: Date.now() };
+  const sig = crypto
+    .createHmac("sha256", process.env.OAUTH_STATE_SECRET!)
+    .update(JSON.stringify(stateData))
+    .digest();
 
-  const params = new URLSearchParams({
-    client_id: process.env.MP_CLIENT_ID!,
-    response_type: "code",
-    redirect_uri: process.env.MP_REDIRECT_URI!,
-    state,
-  });
+  const state = b64url(Buffer.from(JSON.stringify({ ...stateData, s: b64url(sig) })));
 
-  return Response.redirect(`https://auth.mercadopago.com/authorization?${params.toString()}`);
+  const authUrl = new URL("https://auth.mercadopago.com.ar/authorization");
+  authUrl.searchParams.set("client_id", process.env.MP_CLIENT_ID!);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("redirect_uri", process.env.MP_REDIRECT_URI!);
+  authUrl.searchParams.set("state", state);
+
+  return new Response(null, { status: 302, headers: { Location: authUrl.toString() } });
 }

@@ -1,69 +1,68 @@
-// app/api/vendors/register/route.ts
-import bcrypt from "bcryptjs";
+// app/api/auth/register-vendor/route.ts
+import { z } from "zod";
 import db from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+
+const Schema = z.object({
+  user: z.object({
+    email: z.string().email(),
+    password: z.string().min(6),
+    fullName: z.string().optional().or(z.literal("")),
+    dni: z.string().optional().or(z.literal("")),
+  }),
+  vendor: z.object({
+    name: z.string().min(2),
+    address: z.string().optional().or(z.literal("")),
+    openingHours: z.string().optional().or(z.literal("")),
+    closingHours: z.string().optional().or(z.literal("")),
+  }),
+});
 
 export async function POST(req: Request) {
   try {
-    const { user, vendor } = await req.json();
+    const json = await req.json();
+    const { user: u, vendor: v } = Schema.parse(json);
 
-    // Validaciones mínimas
-    if (!user?.email || !user?.password || !vendor?.name) {
-      return new Response(JSON.stringify({ error: "Faltan campos obligatorios" }), {
-        status: 400, headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Evitar duplicados por email y vendor.name
-    const [existingUser, existingVendor] = await Promise.all([
-      db.user.findUnique({ where: { email: user.email } }),
-      db.vendor.findUnique({ where: { name: vendor.name } }),
-    ]);
-    if (existingUser) {
-      return new Response(JSON.stringify({ error: "El email ya existe" }), {
-        status: 409, headers: { "Content-Type": "application/json" },
-      });
-    }
-    if (existingVendor) {
-      return new Response(JSON.stringify({ error: "El nombre de vendor ya existe" }), {
+    const exists = await db.user.findUnique({ where: { email: u.email } });
+    if (exists) {
+      return new Response(JSON.stringify({ error: "Email ya registrado" }), {
         status: 409, headers: { "Content-Type": "application/json" },
       });
     }
 
-    const hashed = await bcrypt.hash(user.password, 10);
+    const passwordHash = await bcrypt.hash(u.password, 10);
 
-    // Transacción: crear user y vendor conectados
     const result = await db.$transaction(async (tx) => {
-      const createdUser = await tx.user.create({
+      const user = await tx.user.create({
         data: {
-          email: user.email,
-          password: hashed,
-          fullName: user.fullName ?? null,
-          dni: user.dni ?? null,
+          email: u.email,
+          password: passwordHash,
+          fullName: u.fullName || null,
+          dni: u.dni || null,
         },
+        select: { id: true, email: true },
       });
 
-      const createdVendor = await tx.vendor.create({
+      const vendor = await tx.vendor.create({
         data: {
-          name: vendor.name,
-          address: vendor.address ?? "Av. Siempre Viva 742",
-          openingHours: vendor.openingHours ? new Date(vendor.openingHours) : new Date("1970-01-01T10:00:00.000Z"),
-          closingHours: vendor.closingHours ? new Date(vendor.closingHours) : new Date("1970-01-01T18:00:00.000Z"),
-          ownerId: createdUser.id,
+          name: v.name,
+          address: v.address || undefined,
+          openingHours: v.openingHours ? new Date(v.openingHours) : undefined,
+          closingHours: v.closingHours ? new Date(v.closingHours) : undefined,
+          ownerId: user.id,
         },
+        select: { id: true },
       });
 
-      return { createdUser, createdVendor };
+      return { user, vendor };
     });
 
-    // Nunca devolver password
-    const safeUser = { ...result.createdUser, password: undefined };
-
-    return new Response(JSON.stringify({ user: safeUser, vendor: result.createdVendor }), {
+    return new Response(JSON.stringify(result), {
       status: 201, headers: { "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message ?? "Error interno" }), {
-      status: 500, headers: { "Content-Type": "application/json" },
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e.message ?? "Error" }), {
+      status: 400, headers: { "Content-Type": "application/json" },
     });
   }
 }

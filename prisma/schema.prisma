@@ -3,105 +3,95 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-
-enum OrderStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CANCELLED
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
-  email     String    @unique
-  password  String
-  fullName  String?
-  dni       String?
-
-  orders    Order[]
-  addresses Address[]
-  favouriteVendors Vendor[] @relation("FavouriteVendors")
-
-  // dueño (opcional) de vendors
-  vendorsOwned Vendor[] @relation("VendorOwner")
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email            String    @unique
+  password         String?
+  fullName         String?
+  dni              String?
+  role             Role      @default(CUSTOMER)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  addresses        Address[]
+  orders           Order[]
+  vendorsOwned     Vendor[]  @relation("VendorOwner")
+  favouriteVendors Vendor[]  @relation("FavouriteVendors")
 }
 
 model Vendor {
-  id           Int      @id @default(autoincrement())
-  name         String   @unique
-  address      String   @default("Av. Siempre Viva 742")
-  openingHours DateTime @default("1970-01-01T10:00:00.000Z")
-  closingHours DateTime @default("1970-01-01T18:00:00.000Z")
-
-  ownerId      Int                       // ← requerido
-  owner        User      @relation("VendorOwner", fields: [ownerId], references: [id])
-
-  products     Product[]
-  orders       Order[]
-  favouritedBy User[]   @relation("FavouriteVendors")
+  id           Int        @id @default(autoincrement())
+  name         String     @unique
+  address      String     @default("Av. Siempre Viva 742")
+  openingHours DateTime   @default(dbgenerated("'1970-01-01 10:00:00'::timestamp without time zone"))
+  closingHours DateTime   @default(dbgenerated("'1970-01-01 18:00:00'::timestamp without time zone"))
+  ownerId      String     @db.Uuid
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   mpAccount    MpAccount?
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now()) @updatedAt
+  orders       Order[]
+  products     Product[]
+  owner        User       @relation("VendorOwner", fields: [ownerId], references: [id])
+  favouritedBy User[]     @relation("FavouriteVendors")
 }
 
-
 model MpAccount {
-  id             Int      @id @default(autoincrement())
-  vendorId       Int      @unique
-  vendor         Vendor   @relation(fields: [vendorId], references: [id])
+  id             Int       @id @default(autoincrement())
+  vendorId       Int       @unique
   mpUserId       String
   accessToken    String
   refreshToken   String?
-  liveMode       Boolean  @default(true)
+  liveMode       Boolean   @default(true)
   tokenExpiresAt DateTime?
+  vendor         Vendor    @relation(fields: [vendorId], references: [id])
 
   @@index([mpUserId])
 }
 
 model Category {
-  id        Int       @id @default(autoincrement())
-  name      String
-  slug      String    @unique
-  products  Product[]
+  id       Int       @id @default(autoincrement())
+  name     String
+  slug     String    @unique
+  products Product[]
 }
 
 model Product {
-  id          Int         @id @default(autoincrement())
-  name        String      @unique
+  id          Int            @id @default(autoincrement())
+  name        String         @unique
   description String?
   price       Float
+  stock       Int            @default(0)
+  active      Boolean        @default(true)
+  imageUrl    String?
   vendorId    Int
-  vendor      Vendor      @relation(fields: [vendorId], references: [id])
   categoryId  Int
-  category    Category    @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime       @default(now())
   orders      OrderProduct[]
+  category    Category       @relation(fields: [categoryId], references: [id])
+  vendor      Vendor         @relation(fields: [vendorId], references: [id])
 
   @@index([vendorId])
   @@index([categoryId])
 }
 
 model Order {
-  id            Int          @id @default(autoincrement())
-  userId        Int
-  user          User         @relation(fields: [userId], references: [id])
-
-  vendorId      Int
-  vendor        Vendor       @relation(fields: [vendorId], references: [id])
-
-  products      OrderProduct[]
-  price         Float
-
-  status        OrderStatus  @default(PENDING)
-  externalRef   String?
-  preferenceId  String?
-  paymentId     String?
+  id             Int            @id @default(autoincrement())
+  userId         String         @db.Uuid
+  vendorId       Int
+  price          Float
+  status         OrderStatus    @default(PENDING)
+  externalRef    String?
+  preferenceId   String?
+  paymentId      String?
   marketplaceFee Float?
-
-  createdAt     DateTime     @default(now())
+  createdAt      DateTime       @default(now())
+  user           User           @relation(fields: [userId], references: [id])
+  vendor         Vendor         @relation(fields: [vendorId], references: [id])
+  products       OrderProduct[]
 
   @@index([vendorId])
   @@index([userId])
@@ -111,29 +101,40 @@ model Order {
 }
 
 model OrderProduct {
-  id        Int      @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   orderId   Int
   productId Int
   quantity  Int
-  order     Order    @relation(fields: [orderId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
 }
 
 model Address {
-  id           Int      @id @default(autoincrement())
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId       Int      
-
-  name         String
-  fullAddress  String
-  latitude     Float
-  longitude    Float
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  userId      String   @db.Uuid
+  name        String
+  fullAddress String
+  latitude    Float
+  longitude   Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([latitude, longitude])
+}
+
+enum OrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum Role {
+  ADMIN
+  VENDOR
+  CUSTOMER
 }
