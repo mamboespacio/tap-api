@@ -1,7 +1,7 @@
 name: Run Prisma Migrate + Seed
 
 on:
-  workflow_dispatch: # ejecución manual (desde el panel de Actions)
+  workflow_dispatch:
 
 jobs:
   migrate_and_seed:
@@ -25,6 +25,7 @@ jobs:
       - name: Run migrations
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
         run: npx prisma migrate deploy
 
       - name: Run seed script
