@@ -1,23 +1,21 @@
-import { createClient } from "@/lib/supabase/client";
-import { cookies } from "next/headers";
+// app/page.tsx
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-export default async function HomePage() {
-  const cookieStore = cookies();
+export default async function RootPage() {
+  // Cliente Supabase SSR
+  const supabase = createClient();
 
-  // Creamos el cliente de Supabase con SSR
-  const supabase = await createClient();
-
-  // Obtenemos la sesión del usuario (SSR seguro)
+  // Obtener la sesión del usuario en el servidor
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Si no hay sesión → login
-  if (!session) {
+  if (session?.user) {
+    // Si hay sesión, redirige al dashboard
+    redirect("/dashboard");
+  } else {
+    // Si no hay sesión, redirige al login
     redirect("/login");
   }
-
-  // Si hay sesión → dashboard
-  redirect("/dashboard");
 }

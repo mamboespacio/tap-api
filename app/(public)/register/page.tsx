@@ -1,12 +1,17 @@
+// src/app/register-vendor/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+// Cliente Supabase del lado del cliente solo para el paso de registro inicial
+import { createClient } from "@/lib/supabase/client"; 
+// Importamos la Server Action segura
+import { createVendorAction } from "@/app/actions"; 
 
+// --- ESQUEMA ZOD (sin cambios) ---
 const RegisterVendorSchema = z.object({
   user: z.object({
     email: z.string().email("Email inválido"),
@@ -24,6 +29,7 @@ const RegisterVendorSchema = z.object({
 
 type RegisterVendorInput = z.infer<typeof RegisterVendorSchema>;
 
+// Inicializamos el cliente de supabase del lado del cliente
 const supabase = createClient();
 
 export default function RegisterVendorPage() {
@@ -51,66 +57,42 @@ export default function RegisterVendorPage() {
   async function onSubmit(values: RegisterVendorInput) {
     setServerError(null);
 
-    // 1️⃣ Crear usuario en Supabase Auth
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: values.user.email,
-      password: values.user.password,
-      options: {
-        data: {
-          fullName: values.user.fullName || null,
-          dni: values.user.dni || null,
+    try {
+      // 1️⃣ Crear usuario en Supabase Auth (Client-side)
+      // Supabase se encarga de iniciar sesión automáticamente y guardar la cookie.
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: values.user.email,
+        password: values.user.password,
+        options: {
+          data: {
+            fullName: values.user.fullName || null,
+            dni: values.user.dni || null,
+          },
         },
-      },
-    });
+      });
 
-    if (signUpError) {
-      setServerError(signUpError.message);
-      return;
+      if (signUpError) {
+        throw new Error(signUpError.message);
+      }
+
+      // 2️⃣ Llamar a la Server Action para crear el Vendor de forma segura (Server-side)
+      await createVendorAction({
+        name: values.vendor.name,
+        address: values.vendor.address || undefined,
+        openingHours: values.vendor.openingHours || undefined,
+        closingHours: values.vendor.closingHours || undefined,
+      });
+
+      // 3️⃣ Redirigir al usuario al dashboard o a donde corresponda
+      reset();
+      router.replace("/dashboard");
+      // router.refresh() asegura que los Server Components refetcheen la data
+      router.refresh(); 
+
+    } catch (error: any) {
+      // Manejar errores de signup O de la server action
+      setServerError(error.message);
     }
-
-    const user = signUpData.user;
-    if (!user) {
-      setServerError("No se pudo obtener el usuario después del registro.");
-      return;
-    }
-
-    // 2️⃣ Crear Vendor vinculado a este usuario
-    const payload = {
-      name: values.vendor.name,
-      address: values.vendor.address || undefined,
-      openingHours: values.vendor.openingHours
-        ? `${new Date().toISOString().slice(0, 10)}T${values.vendor.openingHours}:00.000Z`
-        : undefined,
-      closingHours: values.vendor.closingHours
-        ? `${new Date().toISOString().slice(0, 10)}T${values.vendor.closingHours}:00.000Z`
-        : undefined,
-      userId: user.id, // vínculo directo
-    };
-
-    const res = await fetch("/api/vendors", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      setServerError(data?.error || "Error al crear el comercio");
-      return;
-    }
-
-    reset();
-
-    // 3️⃣ Redirigir al flujo de OAuth de Mercado Pago (si aplica)
-    const vendorId = data?.id;
-    if (vendorId) {
-      window.location.href = `/api/mercado-pago/oauth/start?vendorId=${vendorId}`;
-      return;
-    }
-
-    // 4️⃣ Si no hay flujo MP, redirigir al dashboard
-    router.replace("/dashboard");
-    router.refresh();
   }
 
   return (
@@ -118,7 +100,7 @@ export default function RegisterVendorPage() {
       <h1 className="text-2xl font-semibold">Registro de Vendor</h1>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Datos de usuario */}
+        {/* ... (Secciones de Datos de usuario y Datos del comercio permanecen igual) ... */}
         <section className="grid grid-cols-1 gap-4">
           <h2 className="text-lg font-medium">Datos de usuario</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,7 +111,6 @@ export default function RegisterVendorPage() {
           </div>
         </section>
 
-        {/* Datos del comercio */}
         <section className="grid grid-cols-1 gap-4">
           <h2 className="text-lg font-medium">Datos del comercio</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -139,6 +120,7 @@ export default function RegisterVendorPage() {
             <InputField label="Cierre" type="time" register={register("vendor.closingHours")} error={errors.vendor?.closingHours?.message} />
           </div>
         </section>
+
 
         {serverError && <div className="text-sm text-red-600">{serverError}</div>}
 
@@ -154,7 +136,7 @@ export default function RegisterVendorPage() {
   );
 }
 
-// 🧱 Subcomponente reutilizable para inputs
+// 🧱 Subcomponente reutilizable para inputs (sin cambios)
 function InputField({
   label,
   type = "text",

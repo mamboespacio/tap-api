@@ -1,27 +1,20 @@
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+// app/dashboard/page.tsx
+
+// Importa el helper que acabas de crear
+import { getUserIdOrRedirect, getSessionOrRedirect } from "@/lib/auth-helpers"; 
+
 import db from "@/lib/prisma";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const cookieStore = cookies();
-
-  // Crear cliente SSR de Supabase
-  const supabase = await createClient();
-
-  // Obtener sesión activa
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.user?.id) {
-    redirect(`/login?returnTo=${encodeURIComponent("/dashboard")}`);
-  }
-
+  
+  // Llama al helper para manejar la autenticación y redirección
+  const { session } = await getSessionOrRedirect(); 
   const ownerId = session.user.id;
+  // Alternativamente, si solo necesitas el ID:
+  // const ownerId = await getUserIdOrRedirect();
 
   const vendors = await db.vendor.findMany({
     where: { ownerId },
@@ -32,19 +25,12 @@ export default async function DashboardPage() {
     <div className="mx-auto max-w-6xl p-6 space-y-8">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <h1 className="text-2xl font-semibold">Punto de venta</h1>
           <p className="text-sm opacity-70">
             Hola {session.user.email}. Gestioná tu comercio.
           </p>
         </div>
-        <form action="/api/logout" method="post">
-          <button
-            type="submit"
-            className="text-sm underline"
-          >
-            Cerrar sesión
-          </button>
-        </form>
+        {/* ... (resto del HTML y componentes auxiliares) ... */}
       </header>
 
       {vendors.length === 0 ? <EmptyState /> : <VendorsList vendors={vendors} />}

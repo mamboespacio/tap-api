@@ -1,20 +1,18 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { SidebarWithHeader, type NavItem } from "@/components/SidebarWithHeader";
+import { useSupabaseUser } from "@/lib/useSupabaseUser";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const user = useSupabaseUser();
+
+  if (!user) return <div>Cargando...</div>;
 
   const nav: NavItem[] = [
-    { name: "Inicio", href: "/dashboard", current: pathname === "/" },
-    { name: "Productos", href: "/products", current: pathname.startsWith("/projects") },
-    { name: "Puntos de venta", href: "/pos", current: pathname.startsWith("/team") },
+    { name: "Inicio", href: "/dashboard", current: false },
+    { name: "Productos", href: "/products", current: false },
+    { name: "Puntos de venta", href: "/pos", current: false },
   ];
 
-  return (
-    <SidebarWithHeader brand={{ name: "Mi App" }} nav={nav}>
-      {children}
-    </SidebarWithHeader>
-  );
+  return <SidebarWithHeader brand={{ name: "Mi App" }} nav={nav}>{children}</SidebarWithHeader>;
 }
