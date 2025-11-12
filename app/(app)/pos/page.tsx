@@ -1,24 +1,31 @@
-// app/dashboard/page.tsx
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
 import db from "@/lib/prisma";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  const cookieStore = cookies();
+
+  // Crear cliente SSR de Supabase
+  const supabase = await createClient();
+
+  // Obtener sesión activa
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
   if (!session?.user?.id) {
     redirect(`/login?returnTo=${encodeURIComponent("/dashboard")}`);
   }
-  const ownerId = Number(session.user.id);
+
+  const ownerId = session.user.id;
 
   const vendors = await db.vendor.findMany({
     where: { ownerId },
-    include: {
-      mpAccount: true, // ajustá si tu relación se llama distinto
-    },
+    include: { mpAccount: true },
   });
 
   return (
@@ -27,19 +34,20 @@ export default async function DashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold">Dashboard</h1>
           <p className="text-sm opacity-70">
-            Hola {session.user.name ?? session.user.email}. Gestioná tu comercio.
+            Hola {session.user.email}. Gestioná tu comercio.
           </p>
         </div>
-        <Link href="/api/auth/signout" className="text-sm underline">
-          Cerrar sesión
-        </Link>
+        <form action="/api/logout" method="post">
+          <button
+            type="submit"
+            className="text-sm underline"
+          >
+            Cerrar sesión
+          </button>
+        </form>
       </header>
 
-      {vendors.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <VendorsList vendors={vendors} />
-      )}
+      {vendors.length === 0 ? <EmptyState /> : <VendorsList vendors={vendors} />}
     </div>
   );
 }
@@ -50,7 +58,10 @@ function EmptyState() {
       <h2 className="text-lg font-medium">Aún no tenés comercios</h2>
       <p className="mt-2 text-sm opacity-70">Creá tu comercio para empezar.</p>
       <div className="mt-6">
-        <Link href="/register" className="px-4 py-2 rounded-full bg-green-700 text-white">
+        <Link
+          href="/register"
+          className="px-4 py-2 rounded-full bg-green-700 text-white"
+        >
           Crear comercio
         </Link>
       </div>
@@ -91,7 +102,7 @@ function VendorsList({ vendors }: VendorsListProps) {
               <div className="rounded-lg border p-3">
                 <p className="text-sm">
                   Vinculado a <span className="font-mono">{v.mpAccount.mpUserId}</span>{" "}
-                  {v.mpAccount.liveMode ? "(live)" : "(sandbox)"}.
+                  {v.mpAccount.liveMode ? "(live)" : "(sandbox)"}
                 </p>
                 {v.mpAccount.tokenExpiresAt && (
                   <p className="text-xs opacity-70">
@@ -129,13 +140,22 @@ function VendorsList({ vendors }: VendorsListProps) {
           <section className="space-y-2">
             <h4 className="text-sm font-medium">Acciones rápidas</h4>
             <div className="flex flex-wrap gap-2">
-              <Link href={`/products/new`} className="px-3 py-1.5 rounded-full border text-sm hover:bg-foreground/10">
+              <Link
+                href={`/products/new`}
+                className="px-3 py-1.5 rounded-full border text-sm hover:bg-foreground/10"
+              >
                 Nuevo producto
               </Link>
-              <Link href={`/vendors/${v.id}/products`} className="px-3 py-1.5 rounded-full border text-sm hover:bg-foreground/10">
+              <Link
+                href={`/vendors/${v.id}/products`}
+                className="px-3 py-1.5 rounded-full border text-sm hover:bg-foreground/10"
+              >
                 Ver productos
               </Link>
-              <Link href={`/vendors/${v.id}/orders`} className="px-3 py-1.5 rounded-full border text-sm hover:bg-foreground/10">
+              <Link
+                href={`/vendors/${v.id}/orders`}
+                className="px-3 py-1.5 rounded-full border text-sm hover:bg-foreground/10"
+              >
                 Ver pedidos
               </Link>
             </div>

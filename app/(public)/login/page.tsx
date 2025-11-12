@@ -1,12 +1,11 @@
-// app/login/page.tsx
 "use client";
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 const LoginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -14,10 +13,12 @@ const LoginSchema = z.object({
 });
 type LoginInput = z.infer<typeof LoginSchema>;
 
+const supabase = createClient();
+
 export default function LoginPage() {
   const router = useRouter();
   const search = useSearchParams();
-  const returnTo = search?.get("returnTo") || "/"; // destino por defecto
+  const returnTo = search?.get("returnTo") || "/";
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -31,30 +32,25 @@ export default function LoginPage() {
 
   async function onSubmit(values: LoginInput) {
     setServerError(null);
-    const res = await signIn("credentials", {
+
+    const { error } = await supabase.auth.signInWithPassword({
       email: values.email,
       password: values.password,
-      redirect: false, // manejamos el redirect a mano
     });
 
-    if (res?.error) {
-      // NextAuth usa "CredentialsSignin" cuando las credenciales no matchean
-      setServerError(
-        res.error === "CredentialsSignin"
-          ? "Email o contraseña incorrectos"
-          : res.error
-      );
+    if (error) {
+      setServerError(error.message || "Error al iniciar sesión");
       return;
     }
 
-    // Éxito: NextAuth setea la cookie; navegamos y refrescamos
+    // ✅ Redirección segura con SSR refrescado
     router.replace(returnTo);
     router.refresh();
   }
 
   return (
     <div className="max-w-md mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Iniciar sesión</h1>
+      <h1 className="text-2xl font-semibold">Iniciar Sesión</h1>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="flex flex-col">

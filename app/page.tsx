@@ -1,13 +1,23 @@
-import { getServerSession } from "next-auth";
+import { createClient } from "@/lib/supabase/client";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export default async function HomePage() {
-  const session = await getServerSession(authOptions);
+  const cookieStore = cookies();
 
+  // Creamos el cliente de Supabase con SSR
+  const supabase = await createClient();
+
+  // Obtenemos la sesión del usuario (SSR seguro)
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // Si no hay sesión → login
   if (!session) {
     redirect("/login");
   }
 
+  // Si hay sesión → dashboard
   redirect("/dashboard");
 }

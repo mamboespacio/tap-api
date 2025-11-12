@@ -1,5 +1,5 @@
 import * as React from "react";
-import { signOut } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 
 export type NavItem = {
   name: string;
@@ -104,7 +104,9 @@ function Sidebar({ brand, nav, onNavigate }: { brand: { name: string; logo?: Rea
 
 function Header({ onMenu }: { onMenu: () => void }) {
   const handleLogout = async () => {
-    await signOut({ callbackUrl: "/login" });
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/login";
   };
   return (
     <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-gray-800 dark:bg-gray-900/70 dark:supports-[backdrop-filter]:bg-gray-900/50">
