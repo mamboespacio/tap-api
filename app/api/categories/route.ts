@@ -1,5 +1,13 @@
+// app/api/categories/route.ts
+
+// Forzamos el runtime a Node.js para compatibilidad con Prisma
+export const runtime = 'nodejs';
+
 import db from '@/lib/prisma';
 import { NextResponse } from 'next/server';
+// Importamos los headers CORS centralizados
+import { corsHeaders } from '@/lib/authHelper'; 
+
 
 export async function GET() {
   try {
@@ -14,14 +22,14 @@ export async function GET() {
 
     return new Response(JSON.stringify(categories), {
       status: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json',
-      },
+      headers: corsHeaders, // Usamos headers centralizados
     });
   } catch (error) {
     console.error('Error al obtener categorías:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    return new Response('Internal Server Error', { 
+        status: 500,
+        headers: corsHeaders
+    });
   }
 }
 
@@ -29,10 +37,6 @@ export async function GET() {
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
+    headers: corsHeaders, // Usamos headers centralizados
   });
 }
