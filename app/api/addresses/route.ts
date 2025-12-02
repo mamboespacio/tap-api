@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     const { name, fullAddress, latitude, longitude } = schema.parse(body);
 
     const address = await db.address.create({
-      data: { name, fullAddress, latitude, longitude, userId: Number(userId) }, // ajustá tipo si es string
+      data: { name, fullAddress, latitude, longitude, userId: userId }, // ajustá tipo si es string
     });
 
     return Response.json({ address }, { status: 201 });
