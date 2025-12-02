@@ -1,25 +1,18 @@
 // app/api/categories/[slug]/route.ts
 
-// Forzamos el runtime a Node.js para compatibilidad con Prisma
 export const runtime = 'nodejs';
 
 import db from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import { NextRequest, NextResponse } from 'next/server';
-// Importamos los headers CORS centralizados para consistencia
 import { corsHeaders } from '@/lib/authHelper'; 
 
-// Definimos la interfaz que Next.js espera para el contexto de la ruta dinámica
-interface RouteContext {
-  params: {
-    slug: string; // El slug de la URL
-  };
-}
 
-// ✅ La firma de la función GET debe recibir el contexto como segundo argumento
-export async function GET(req: NextRequest, context: RouteContext) {
-  // ✅ Accedemos directamente a params.slug, sin usar 'await'
-  const { slug } = context.params; 
+export async function GET(
+  req: NextRequest, 
+  { params }: { params: { slug: string } } 
+) {
+  const { slug } = params;
 
   try {
     const category = await db.category.findUnique({
@@ -32,12 +25,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
     });
 
     if (!category) {
-       notFound(); // notFound() de Next.js gestiona la respuesta 404
+       notFound(); 
     }
 
     return new Response(JSON.stringify(category), {
       status: 200,
-      headers: corsHeaders, // Usamos headers centralizados
+      headers: corsHeaders, 
     });
   } catch (error) {
     console.error('Error al obtener categorías:', error);
@@ -51,6 +44,6 @@ export async function GET(req: NextRequest, context: RouteContext) {
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
-    headers: corsHeaders, // Usamos headers centralizados
+    headers: corsHeaders, 
   });
 }
