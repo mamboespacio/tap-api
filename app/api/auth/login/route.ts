@@ -1,40 +1,38 @@
-import { NextRequest } from "next/server";
-import jwt from "jsonwebtoken";
-import db from "@/lib/prisma";
-import { schema } from "@/lib/schema"; // tu zod schema
+// app/api/auth/mobile-login/route.ts
+
+export const runtime = 'nodejs'; 
+
+import { NextResponse, NextRequest } from 'next/server';
+
+// ✅ Importa tu helper centralizado
+import { createClient } from "@/lib/supabase/server"; 
+
+// Importa tu cliente de Prisma si es necesario
+// import db from '@/lib/prisma'; 
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { email, password } = schema.parse(body);
-
-    const user = await db.user.findFirst({
-      where: {
-        email,
-        password,
-      },
-    });
-
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Credenciales inválidas" }), {
-        status: 401,
-      });
-    }
-
-    const token = jwt.sign(
-      { id: user.id, email: user.email },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" }
-    );
-
-    return new Response(JSON.stringify({ token }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Error en login mobile:", error);
-    return new Response(JSON.stringify({ error: "Error interno del servidor" }), {
-      status: 500,
-    });
+  const { email, password } = await req.json();
+  
+  if (!email || !password) {
+    return NextResponse.json({ error: "Faltan credenciales" }, { status: 400 });
   }
+
+  // 1. Usa tu helper personalizado para obtener el cliente Supabase
+  //    Asumo que este helper se encarga de pasar las cookies automáticamente
+  const supabase = await createClient();
+  
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    console.error("Error de inicio de sesión de Supabase:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 401 });
+  }
+
+  // 2. Devuelve una respuesta exitosa
+  return NextResponse.json({ 
+    message: "Inicio de sesión exitoso"
+  });
 }
