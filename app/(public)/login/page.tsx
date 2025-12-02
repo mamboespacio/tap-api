@@ -1,87 +1,39 @@
+// src/app/login/page.tsx
 "use client";
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-
-const LoginSchema = z.object({
-  email: z.string().email("Email inválido"),
-  password: z.string().min(1, "Ingresá tu contraseña"),
-});
-type LoginInput = z.infer<typeof LoginSchema>;
-
-const supabase = createClient();
+import { useLoginForm } from "@/hooks/use-login-form"; // Importamos el nuevo hook
+import InputField from "@/components/ui/inputField";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const search = useSearchParams();
-  const returnTo = search?.get("returnTo") || "/";
-  const [serverError, setServerError] = useState<string | null>(null);
-
+  // Obtenemos los métodos del hook
   const {
     register,
-    handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginInput>({
-    resolver: zodResolver(LoginSchema),
-    defaultValues: { email: "", password: "" },
-  });
-
-  async function onSubmit(values: LoginInput) {
-    setServerError(null);
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: values.email,
-      password: values.password,
-    });
-
-    if (error) {
-      setServerError(error.message || "Error al iniciar sesión");
-      return;
-    }
-
-    // ✅ Redirección segura con SSR refrescado
-    router.replace(returnTo);
-    router.refresh();
-  }
+    onSubmit,
+    serverError,
+  } = useLoginForm();
 
   return (
     <div className="max-w-md mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Iniciar Sesión</h1>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="flex flex-col">
-          <label className="text-sm mb-1">Email</label>
-          <input
-            type="email"
-            className="border rounded-lg px-3 py-2 bg-transparent"
+      <form onSubmit={onSubmit} className="space-y-4">
+        {/* Usamos InputField o la estructura de div/label/input */}
+        <InputField 
+            label="Email" 
+            type="email" 
+            register={register("email")} 
+            error={errors.email?.message} 
             autoComplete="email"
-            {...register("email")}
-          />
-          {errors.email && (
-            <span className="text-sm text-red-500 mt-1">
-              {errors.email.message}
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-col">
-          <label className="text-sm mb-1">Contraseña</label>
-          <input
-            type="password"
-            className="border rounded-lg px-3 py-2 bg-transparent"
+        />
+        
+        <InputField 
+            label="Contraseña" 
+            type="password" 
+            register={register("password")} 
+            error={errors.password?.message} 
             autoComplete="current-password"
-            {...register("password")}
-          />
-          {errors.password && (
-            <span className="text-sm text-red-500 mt-1">
-              {errors.password.message}
-            </span>
-          )}
-        </div>
+        />
 
         {serverError && (
           <div className="text-sm text-red-600">{serverError}</div>

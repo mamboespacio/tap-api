@@ -1,4 +1,4 @@
-// /api/mercado-pago/connect.ts
+// /api/mercadopago/connect.ts
 
 const CLIENT_ID = process.env.MP_CLIENT_ID!;
 const REDIRECT_URI = process.env.MP_REDIRECT_URI!;

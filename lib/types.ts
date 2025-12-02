@@ -45,6 +45,12 @@ export interface Vendor {
   closingHours: string;
   products: Product[];
   isFavourite: boolean;
+  mpAccount: {
+    mpUserId: string;
+    liveMode: boolean;
+    tokenExpiresAt: Date | null;
+  } | null;
+  ownerId: number;
 }
 export interface Product {
   id: number;

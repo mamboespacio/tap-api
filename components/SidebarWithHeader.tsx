@@ -1,5 +1,8 @@
 import * as React from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { Menu } from "lucide-react";
+import { User } from "mercadopago";
 
 export type NavItem = {
   name: string;
@@ -9,14 +12,18 @@ export type NavItem = {
   badge?: string;
 };
 
+const logoUrl = "/icon.png"; 
+
 export function SidebarWithHeader({
   nav = [],
   children,
-  brand = { name: "Your App", logo: undefined as React.ReactNode },
+  brand = { name: "TAP", logo: undefined as React.ReactNode },
+  currentUser,
 }: {
   nav?: NavItem[];
   children: React.ReactNode;
   brand?: { name: string; logo?: React.ReactNode };
+  currentUser: any;
 }) {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
@@ -44,7 +51,7 @@ export function SidebarWithHeader({
 
       {/* Header */}
       <div className="lg:pl-72">
-        <Header onMenu={() => setSidebarOpen(true)} />
+        <Header onMenu={() => setSidebarOpen(true)} currentUser={currentUser} />
 
         {/* Main */}
         <main className="px-4 py-6 sm:px-6 lg:px-8">
@@ -57,15 +64,16 @@ export function SidebarWithHeader({
 
 function Sidebar({ brand, nav, onNavigate }: { brand: { name: string; logo?: React.ReactNode }; nav: NavItem[]; onNavigate?: () => void }) {
   return (
-    <div className="flex grow flex-col gap-y-4 overflow-y-auto border-r border-gray-200 bg-white px-4 pb-6 pt-4 dark:border-gray-800 dark:bg-gray-900">
+    <div className="flex grow flex-col gap-y-4 overflow-y-auto border-r border-gray-200 bg-white px-4 pb-6 pt-6 dark:border-gray-800 dark:bg-gray-900">
       {/* Brand */}
-      <div className="flex h-12 items-center gap-2">
-        <div className="h-8 w-8 overflow-hidden rounded-md bg-gray-100 ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-          {brand.logo ?? (
-            <div className="flex h-full w-full items-center justify-center text-xs font-bold text-gray-500">LOGO</div>
-          )}
-        </div>
-        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{brand.name}</span>
+      <div className="flex justify-center">
+        <Image 
+          src={logoUrl} 
+          alt="TAP" 
+          width={140} // Define el ancho fijo
+          height={140} // Define el alto fijo
+          className="h-30 w-auto" // Clases de Tailwind adicionales si es necesario
+        />
       </div>
 
       {/* Nav */}
@@ -80,7 +88,7 @@ function Sidebar({ brand, nav, onNavigate }: { brand: { name: string; logo?: Rea
                   }`}
               >
                 <span className="flex h-5 w-5 items-center justify-center">
-                  icon
+                  {item.icon}
                 </span>
                 <span className="truncate">{item.name}</span>
                 {item.badge ? (
@@ -95,14 +103,14 @@ function Sidebar({ brand, nav, onNavigate }: { brand: { name: string; logo?: Rea
 
         {/* Secondary */}
         <div className="mt-4 border-t border-gray-200 pt-4 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
-          <p>© {new Date().getFullYear()} Your Company</p>
+          <p>© {new Date().getFullYear()} Take Away Please</p>
         </div>
       </nav>
     </div>
   );
 }
 
-function Header({ onMenu }: { onMenu: () => void }) {
+function Header({ onMenu, currentUser }: { onMenu: () => void, currentUser: any }) {
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -118,11 +126,11 @@ function Header({ onMenu }: { onMenu: () => void }) {
           onClick={onMenu}
         >
           <span className="sr-only">Open sidebar</span>
-          icon
+          <Menu className="lg:hidden h-6 w-6" aria-hidden="true" />
         </button>
 
         {/* Search */}
-        <div className="relative hidden min-w-0 flex-1 sm:block">
+        {/* <div className="relative hidden min-w-0 flex-1 sm:block">
           <label htmlFor="search" className="sr-only">
             Search
           </label>
@@ -136,22 +144,18 @@ function Header({ onMenu }: { onMenu: () => void }) {
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             icon
           </div>
-        </div>
+        </div> */}
 
         {/* Right */}
         <div className="ml-auto flex items-center gap-2">
-          <button className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-gray-300 dark:hover:bg-gray-800">
-            icon
-          </button>
           <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-2 py-1.5 dark:border-gray-800 dark:bg-gray-900">
-            <img
+            {/* <img
               alt="Avatar"
               src="https://images.unsplash.com/photo-1502685104226-ee32379fefbe?q=80&w=96&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wx"
               className="h-8 w-8 rounded-full object-cover"
-            />
+            /> */}
             <div className="hidden text-left text-sm sm:block">
-              <div className="font-medium">Leslie Alexander</div>
-              <div className="text-gray-500 dark:text-gray-400">leslie@example.com</div>
+              <div className="text-gray-500 dark:text-gray-400">{currentUser.email}</div>
             </div>
           </div>
           <button

@@ -2,17 +2,20 @@
 
 import { SidebarWithHeader, type NavItem } from "@/components/SidebarWithHeader";
 import { useSupabaseUser } from "@/lib/useSupabaseUser";
+import { ClipboardCheck, Leaf, MapPin } from "lucide-react";
+
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = useSupabaseUser();
 
+
   if (!user) return <div>Cargando...</div>;
 
   const nav: NavItem[] = [
-    { name: "Inicio", href: "/dashboard", current: false },
-    { name: "Productos", href: "/products", current: false },
-    { name: "Puntos de venta", href: "/pos", current: false },
+    { name: "Inicio", href: "/dashboard", current: false, icon: <Leaf/> },
+    { name: "Productos", href: "/products", current: false, icon: <ClipboardCheck/> },
+    { name: "Puntos de venta", href: "/pos", current: false, icon: <MapPin/> },
   ];
 
-  return <SidebarWithHeader brand={{ name: "Mi App" }} nav={nav}>{children}</SidebarWithHeader>;
+  return <SidebarWithHeader brand={{ name: "Take Away Please" }} nav={nav} currentUser={user}>{children}</SidebarWithHeader>;
 }

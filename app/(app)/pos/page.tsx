@@ -97,7 +97,7 @@ function VendorsList({ vendors }: VendorsListProps) {
                 )}
                 <div className="mt-3 flex gap-2">
                   <Link
-                    href={`/api/mercado-pago/oauth/start?vendorId=${v.id}`}
+                    href={`/api/mercadopago/oauth/start?vendorId=${v.id}`}
                     className="px-3 py-1.5 rounded-full border text-sm hover:bg-foreground/10"
                   >
                     Re-vincular
@@ -114,7 +114,7 @@ function VendorsList({ vendors }: VendorsListProps) {
               <div className="rounded-lg border p-3">
                 <p className="text-sm">No vinculado.</p>
                 <Link
-                  href={`/api/mercado-pago/oauth/start?vendorId=${v.id}`}
+                  href={`/api/mercadopago/oauth/start?vendorId=${v.id}`}
                   className="mt-2 inline-flex px-3 py-1.5 rounded-full bg-green-700 text-white text-sm"
                 >
                   Conectar con Mercado Pago
