@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 import db from "@/lib/prisma";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
