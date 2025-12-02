@@ -1,4 +1,4 @@
-// app/api/categories/[slug]/route.ts
+// app/api/categories/[slug]/route.ts (Versión Limpia)
 
 export const runtime = 'nodejs';
 
@@ -7,12 +7,14 @@ import { notFound } from 'next/navigation';
 import { NextRequest, NextResponse } from 'next/server';
 import { corsHeaders } from '@/lib/authHelper'; 
 
+// SIN interfaz RouteContext personalizada
 
 export async function GET(
   req: NextRequest, 
+  // Usa el tipado estándar y simple que Next.js espera:
   { params }: { params: { slug: string } } 
 ) {
-  const { slug } = params;
+  const { slug } = params; // Sin 'await' aquí
 
   try {
     const category = await db.category.findUnique({
