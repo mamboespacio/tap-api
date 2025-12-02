@@ -42,7 +42,7 @@ async function seedDemoUser() {
   return user;
 }
 
-async function seedVendors(ownerId: number) {
+async function seedVendors(ownerId: string) {
   const vendors = [
     {
       name: 'Cafetería El Gato',
