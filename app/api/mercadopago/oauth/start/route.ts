@@ -1,5 +1,5 @@
 // app/api/mercadopago/oauth/start/route.ts
-
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 import db from "@/lib/prisma";
