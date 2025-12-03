@@ -43,7 +43,7 @@ export default async function VendorProductsPage() {
   const productsNormalized = products.map(p => ({
     ...p,
     imageUrl: p.imageUrl ?? undefined,
-  }));
+  })) as typeof products;
 
   return (
     <div className="p-6">
