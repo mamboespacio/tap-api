@@ -139,7 +139,7 @@ export async function GET(req: Request) {
 
     // 4️⃣ Redirigir a UI (sesión Supabase sigue activa)
     return Response.redirect(
-      `${process.env.APP_BASE_URL}/seller/linked?vendorId=${vendorId}`
+      `${process.env.APP_BASE_URL}/dashboard`
     );
   } catch (err: any) {
     console.error("Error callback:", err);
