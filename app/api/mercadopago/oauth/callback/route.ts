@@ -18,6 +18,20 @@ export async function GET(req: Request) {
     const code = searchParams.get("code");
     const stateB64 = searchParams.get("state");
 
+    // chequeo que tengo las variables de entorno necesarias
+    const MP_CLIENT_SECRET = process.env.MP_CLIENT_SECRET;
+    const MP_CLIENT_ID = process.env.MP_CLIENT_ID;
+    const OAUTH_STATE_SECRET = process.env.OAUTH_STATE_SECRET;
+    const MP_REDIRECT_URI = process.env.MP_REDIRECT_URI;
+
+      if (!MP_CLIENT_SECRET || !MP_CLIENT_ID || !OAUTH_STATE_SECRET || !MP_REDIRECT_URI) {
+      console.error("Faltan variables de entorno para el callback de Mercado Pago");
+      return new Response(JSON.stringify({ error: "Error de configuración interna en callback" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     if (!code || !stateB64) {
       return new Response(JSON.stringify({ error: "Faltan parámetros" }), {
         status: 400,
