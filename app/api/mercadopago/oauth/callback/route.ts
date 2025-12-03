@@ -4,13 +4,7 @@ export const runtime = 'nodejs';
 import db from "@/lib/prisma";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
-
-function b64urlDecode(input: string) {
-  input = input.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = input.length % 4;
-  if (pad) input += "=".repeat(4 - pad);
-  return Buffer.from(input, "base64").toString("utf8");
-}
+import { b64url, b64urlDecode } from "@/lib/utils";
 
 export async function GET(req: Request) {
   try {
@@ -24,7 +18,7 @@ export async function GET(req: Request) {
     const OAUTH_STATE_SECRET = process.env.OAUTH_STATE_SECRET;
     const MP_REDIRECT_URI = process.env.MP_REDIRECT_URI;
 
-      if (!MP_CLIENT_SECRET || !MP_CLIENT_ID || !OAUTH_STATE_SECRET || !MP_REDIRECT_URI) {
+    if (!MP_CLIENT_SECRET || !MP_CLIENT_ID || !OAUTH_STATE_SECRET || !MP_REDIRECT_URI) {
       console.error("Faltan variables de entorno para el callback de Mercado Pago");
       return new Response(JSON.stringify({ error: "Error de configuración interna en callback" }), {
         status: 500,
@@ -51,17 +45,11 @@ export async function GET(req: Request) {
     }
 
     const checkSig = crypto
-      .createHmac("sha256", process.env.OAUTH_STATE_SECRET!)
-      .update(JSON.stringify({ v: vendorId, t }))
-      .digest();
+    .createHmac("sha256", OAUTH_STATE_SECRET) 
+    .update(JSON.stringify({ v: vendorId, t }))
+    .digest();
 
-    const okSig =
-      s ===
-      Buffer.from(checkSig)
-        .toString("base64")
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/, "");
+    const okSig = s === b64url(checkSig);
 
     if (!okSig) {
       return new Response(JSON.stringify({ error: "state no verificado" }), {

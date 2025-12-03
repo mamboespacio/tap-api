@@ -5,11 +5,7 @@ export const runtime = 'nodejs';
 import db from "@/lib/prisma";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
-
-function b64url(b: Buffer | string) {
-  const s = typeof b === "string" ? Buffer.from(b) : b;
-  return s.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
+import { b64url } from "@/lib/utils";
 
 export async function GET(req: Request) {
   try {
