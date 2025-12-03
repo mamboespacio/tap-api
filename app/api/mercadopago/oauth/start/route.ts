@@ -16,11 +16,11 @@ export async function GET(req: Request) {
     }
     
     // ⚠️ Validación de variables de entorno al inicio para prevenir errores en tiempo de ejecución
-    const MP_CLIENT_SECRET = process.env.MP_CLIENT_SECRET;
+    const OAUTH_STATE_SECRET = process.env.OAUTH_STATE_SECRET;
     const MP_CLIENT_ID = process.env.MP_CLIENT_ID;
     const MP_REDIRECT_URI = process.env.MP_REDIRECT_URI;
     
-    if (!MP_CLIENT_SECRET || !MP_CLIENT_ID || !MP_REDIRECT_URI) {
+    if (!OAUTH_STATE_SECRET || !MP_CLIENT_ID || !MP_REDIRECT_URI) {
       console.error("Faltan variables de entorno para la configuración de OAuth de Mercado Pago");
       return new Response(JSON.stringify({ error: "Error de configuración interna" }), {
         status: 500,
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
     // 3️⃣ Firmar state
     const stateData = { v: vendorId, t: Date.now() };
     const sig = crypto
-      .createHmac("sha256", MP_CLIENT_SECRET) // ✅ Se usa la variable validada
+      .createHmac("sha256", OAUTH_STATE_SECRET) // ✅ Se usa la variable validada
       .update(JSON.stringify(stateData))
       .digest();
 
