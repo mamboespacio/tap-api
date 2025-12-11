@@ -1,65 +1,85 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
-// Si ya tienes una Server Action que crea el vendor en tu DB puedes importarla.
-// import { registerVendorAction } from "@/app/actions";
+import { z } from "zod";
+import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { corsHeaders } from "@/lib/authHelper";
+import db from "@/lib/prisma";
+
+const RegisterSchema = z.object({
+  email: z.string().email("Formato de email inválido"),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+  fullName: z.string().optional(),
+  dni: z.string().optional(),
+  vendorName: z.string().optional(),
+  vendorAddress: z.string().optional(),
+  openingHours: z.string().optional(),
+  closingHours: z.string().optional(),
+});
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const {
-      email,
-      password,
-      fullName,
-      dni,
-      vendorName,
-      vendorAddress,
-      openingHours,
-      closingHours,
-    } = body ?? {};
+    const parsed = RegisterSchema.safeParse(body);
 
-    if (!email || !password || !vendorName) {
-      return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Datos de registro inválidos", details: parsed.error.issues },
+        { status: 400, headers: corsHeaders }
+      );
     }
 
-    // Pasamos el cookieStore para que createClient pueda setear cookies de sesión en la respuesta
-    const cookieStore = cookies();
-    const supabase = createClient(cookieStore);
+    const { email, password, fullName, dni, vendorName, vendorAddress, openingHours, closingHours } =
+      parsed.data;
 
-    // Crear el usuario en Supabase Auth
+    const supabase = await createSupabaseClient();
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      console.error("Error al registrar en Supabase:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 400, headers: corsHeaders });
     }
 
-    // data.user y data.session pueden ser null si requiere confirmación por email.
-    // Si tu flujo requiere crear además un registro "vendor" en tu base de datos,
-    // puedes hacerlo aquí. Ejemplo:
-    //
-    // if (data.user) {
-    //   // registerVendorAction sería una Server Action que crea el vendor en la BD.
-    //   // Asegúrate que registerVendorAction esté disponible para ser llamada desde aquí.
-    //   await registerVendorAction({
-    //     userId: data.user.id,
-    //     fullName,
-    //     dni,
-    //     vendorName,
-    //     vendorAddress,
-    //     openingHours,
-    //     closingHours,
-    //   });
-    // }
-    //
-    // Si prefieres crear el vendor sólo después de que el usuario confirme su email,
-    // deja esta parte para otro flow (webhook, confirmación, o al completar perfil).
+    const user = data.user;
 
-    // Devolver user y session para que clientes móviles puedan guardar tokens.
-    return NextResponse.json({ user: data.user, session: data.session }, { status: 200 });
+    if (user) {
+      await db.profile.upsert({
+        where: { id: user.id },
+        update: {
+          email: user.email ?? email,
+          full_name: fullName ?? undefined,
+        },
+        create: {
+          id: user.id,
+          email: user.email ?? email,
+          full_name: fullName ?? null,
+        },
+      });
+
+      if (vendorName) {
+        await db.vendor.create({
+          data: {
+            owner_id: user.id,
+            name: vendorName,
+            address: vendorAddress ?? "Av. Siempre Viva 742",
+            opening_hours: openingHours ? new Date(openingHours) : undefined,
+            closing_hours: closingHours ? new Date(closingHours) : undefined,
+          },
+        });
+      }
+    }
+
+    return NextResponse.json({ user: data.user ?? null, session: data.session ?? null }, { status: 200, headers: corsHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
+    console.error("register POST error:", err);
+    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500, headers: corsHeaders });
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
