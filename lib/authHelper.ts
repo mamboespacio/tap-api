@@ -1,36 +1,37 @@
-// lib/authHelper.ts
-// Usamos el runtime de Node.js aquí también por si acaso
-export const runtime = 'nodejs';
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 
-import { createClient } from "@/lib/supabase/server";
-// Ya que usas createClient de "@/lib/supabase/server", puedes usar tipos de supabase-js
-import { User } from '@supabase/supabase-js'; 
-
-// Definimos los headers CORS centralizados
 export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-/**
- * Valida la sesión del usuario con Supabase.
- * @returns {Promise<User | Response>} Retorna el objeto User si está autenticado, o un objeto Response de error si no lo está.
- */
-export async function authenticateUser(): Promise<User | Response> {
-  const supabase = await createClient();
-  // Usamos getUser() para una validación segura en el servidor
-  const { data: { user } } = await supabase.auth.getUser(); 
+export async function createServerSupabaseClient() {
+  const cookieStore = await cookies();
+  return createSupabaseClient();
+}
 
-  if (!user) {
-    // Si no hay usuario, devolvemos una respuesta de error 401
-    return new Response(JSON.stringify({ error: "No autorizado" }), {
+export async function authenticateUser() {
+  try {
+    const supabase = await createServerSupabaseClient();
+
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data?.user) {
+      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: corsHeaders,
+      });
+    }
+
+    return data.user;
+  } catch (err) {
+    console.error("authenticateUser error:", err);
+    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: corsHeaders,
     });
   }
-
-  // Si hay usuario, retornamos el objeto user
-  return user;
 }

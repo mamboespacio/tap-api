@@ -1,38 +1,45 @@
-// app/api/auth/mobile-login/route.ts
+export const runtime = "nodejs";
 
-export const runtime = 'nodejs'; 
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
+import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { corsHeaders } from "@/lib/authHelper";
 
-import { NextResponse, NextRequest } from 'next/server';
-
-// ✅ Importa tu helper centralizado
-import { createClient } from "@/lib/supabase/server"; 
-
-// Importa tu cliente de Prisma si es necesario
-// import db from '@/lib/prisma'; 
+const LoginSchema = z.object({
+  email: z.string().email("Email inválido"),
+  password: z.string().min(1, "Contraseña requerida"),
+});
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
-  
-  if (!email || !password) {
-    return NextResponse.json({ error: "Faltan credenciales" }, { status: 400 });
+  try {
+    const body = await req.json();
+    const parsed = LoginSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Credenciales inválidas", details: parsed.error.issues }, { status: 400, headers: corsHeaders });
+    }
+
+    const { email, password } = parsed.data;
+
+    const supabase = await createSupabaseClient();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.error("Error de inicio de sesión en Supabase:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 401, headers: corsHeaders });
+    }
+
+    return NextResponse.json({ user: data.user ?? null, session: data.session ?? null }, { status: 200, headers: corsHeaders });
+  } catch (err: any) {
+    console.error("login POST error:", err);
+    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500, headers: corsHeaders });
   }
+}
 
-  // 1. Usa tu helper personalizado para obtener el cliente Supabase
-  //    Asumo que este helper se encarga de pasar las cookies automáticamente
-  const supabase = await createClient();
-  
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error) {
-    console.error("Error de inicio de sesión de Supabase:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 401 });
-  }
-
-  // 2. Devuelve una respuesta exitosa
-  return NextResponse.json({ 
-    message: "Inicio de sesión exitoso"
-  });
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }

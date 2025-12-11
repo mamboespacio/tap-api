@@ -35,21 +35,21 @@ export function useLoginForm() {
         return;
       }
 
-      // Leer returnTo si viene en la querystring (ej: /login?returnTo=/dashboard)
       const params = new URLSearchParams(window.location.search);
       const returnTo = params.get("returnTo") || "/dashboard";
 
-      // Redirigimos al destino (replace para evitar back al login)
       router.replace(returnTo);
     } catch (err: any) {
-      setServerError(err?.message ?? String(err));
+      console.error("useLoginForm error:", err);
+      setServerError(err?.message ?? "Error de conexión");
     }
   });
 
   return {
     register,
-    formState: { errors, isSubmitting },
     onSubmit,
+    errors,
+    isSubmitting,
     serverError,
   };
 }
