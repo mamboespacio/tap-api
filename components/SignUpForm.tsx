@@ -1,88 +1,70 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 import InputField from "@/components/ui/InputField";
-import { createClient } from "@/lib/supabase/client";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+import { registerVendorAction } from "@/app/auth/actions";
 
-const RegisterVendorSchema = z.object({
+const RegisterSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "Mínimo 6 caracteres"),
-  fullName: z.string().optional().or(z.literal("")),
-  dni: z.string().optional().or(z.literal("")),
-  vendorName: z.string().min(2, "Muy corto"),
-  vendorAddress: z.string().optional().or(z.literal("")),
-  openingHours: z.string().optional().or(z.literal("")),
-  closingHours: z.string().optional().or(z.literal("")),
+  fullName: z.string().optional(),
+  dni: z.string().optional(),
+  vendorName: z.string().min(1, "Nombre del comercio es obligatorio"),
+  vendorAddress: z.string().optional(),
+  openingHours: z.string().optional(),
+  closingHours: z.string().optional(),
 });
+type RegisterValues = z.infer<typeof RegisterSchema>;
 
-type FormValues = z.infer<typeof RegisterVendorSchema>;
-
-export default function RegisterVendorPage() {
+export default function SignUpForm() {
   const router = useRouter();
-  const [serverError, setServerError] = useState<string | null>(null);
-
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
-  } = useForm<FormValues>({
-    resolver: zodResolver(RegisterVendorSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      fullName: "",
-      dni: "",
-      vendorName: "",
-      vendorAddress: "",
-      openingHours: "",
-      closingHours: "",
-    },
+  } = useForm<RegisterValues>({
+    resolver: zodResolver(RegisterSchema),
   });
 
-  const onSubmit = async (values: FormValues) => {
+  const supabase = createClient(); // client-side (ANON key)
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const onSubmit = handleSubmit(async (values: RegisterValues) => {
     setServerError(null);
 
-    const supabase = createClient();
-
     try {
-      const { data, error } = await supabase.auth.signUp(
-        {
-          email: values.email,
-          password: values.password,
-          options: {
-            data: {
-              full_name: values.fullName || null,
-              dni: values.dni || null,
-              vendor_name: values.vendorName,
-              vendor_address: values.vendorAddress || null,
-              opening_hours: values.openingHours || null,
-              closing_hours: values.closingHours || null,
-            },
-          }
-        },
-      );
-
-      if (error) throw error;
-
-      // Si la cuenta queda activa inmediatamente, data.user estará presente.
-      // En cualquier caso redirigimos a una pantalla de "revisá tu email" o éxito.
+      await registerVendorAction(values);
       reset();
       router.push("/dashboard");
     } catch (err: unknown) {
-      setServerError(err instanceof Error ? err.message : "Ocurrió un error");
+      const message = err instanceof Error ? err.message : "Ocurrió un error";
+      setServerError(message);
     }
-  };
+
+    // try {
+    //   const { error } = await supabase.auth.signUp({
+    //       email: values.email,
+    //       password: values.password,
+    //     });
+    //   if (error) throw error;
+    //   reset();
+    //   router.push("/auth/dashboard");
+    // } catch (err: unknown) {
+    //   const message = err instanceof Error ? err.message : "Ocurrió un error";
+    //   setServerError(message);
+    // }
+  });
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Registro de Vendor</h1>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={onSubmit} className="space-y-6">
         <section className="grid grid-cols-1 gap-4">
           <h2 className="text-lg font-medium">Datos de usuario</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -90,60 +72,57 @@ export default function RegisterVendorPage() {
               label="Email"
               type="email"
               register={register("email")}
-              error={errors.email?.message}
+              error={errors.email?.message as string | undefined}
             />
             <InputField
               label="Contraseña"
               type="password"
               register={register("password")}
-              error={errors.password?.message}
+              error={errors.password?.message as string | undefined}
               autoComplete="new-password"
             />
             <InputField
               label="Nombre completo (opcional)"
               register={register("fullName")}
-              error={errors.fullName?.message}
+              error={errors.fullName?.message as string | undefined}
             />
             <InputField
               label="DNI (opcional)"
               register={register("dni")}
-              error={errors.dni?.message}
+              error={errors.dni?.message as string | undefined}
             />
           </div>
         </section>
-
         <section className="grid grid-cols-1 gap-4">
           <h2 className="text-lg font-medium">Datos del comercio</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InputField
               label="Nombre del comercio"
               register={register("vendorName")}
-              error={errors.vendorName?.message}
+              error={errors.vendorName?.message as string | undefined}
               className="md:col-span-2"
             />
             <InputField
               label="Dirección"
               register={register("vendorAddress")}
-              error={errors.vendorAddress?.message}
+              error={errors.vendorAddress?.message as string | undefined}
               className="md:col-span-2"
             />
             <InputField
               label="Apertura"
               type="time"
               register={register("openingHours")}
-              error={errors.openingHours?.message}
+              error={errors.openingHours?.message as string | undefined}
             />
             <InputField
               label="Cierre"
               type="time"
               register={register("closingHours")}
-              error={errors.closingHours?.message}
+              error={errors.closingHours?.message as string | undefined}
             />
           </div>
         </section>
-
         {serverError && <div className="text-sm text-red-600">{serverError}</div>}
-
         <button
           type="submit"
           disabled={isSubmitting}

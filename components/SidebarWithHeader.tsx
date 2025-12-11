@@ -114,7 +114,7 @@ function Header({ onMenu, currentUser }: { onMenu: () => void, currentUser: any 
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    window.location.href = "/login";
+    window.location.href = "/auth/login";
   };
   return (
     <header className="sticky top-0 z-20 border-b border-gray-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-gray-800 dark:bg-gray-900/70 dark:supports-[backdrop-filter]:bg-gray-900/50">

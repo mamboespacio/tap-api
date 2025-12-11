@@ -2,12 +2,22 @@
 
 import { PrismaClient } from '@prisma/client';
 import ProductsList from "@/components/products/ProductsList";
-import { getSessionOrRedirect } from "@/lib/auth-helpers";
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 
 const prisma = new PrismaClient();
 
 export default async function VendorProductsPage() {
-  const { user } = await getSessionOrRedirect();
+  const supabase = await createClient();
+  try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData?.user?.id) {
+      // No hay usuario válido -> redirigir al login
+      return redirect("/auth/login");
+    }
+
+    const user = userData.user;
 
   // Obtener el ID del vendedor para filtrar los productos
   const vendor = await prisma.vendor.findFirst({
@@ -41,4 +51,8 @@ export default async function VendorProductsPage() {
       <ProductsList products={products} categories={categories} />
     </div>
   );
+} catch (error) {
+    console.error("Error en VendorProductsPage:", error);
+    return <p>Error al cargar los productos. Intenta nuevamente más tarde.</p>;
+  }
 }

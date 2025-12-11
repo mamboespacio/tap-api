@@ -33,6 +33,15 @@ export default function OrderList({ orders }: { orders: OrderWithDetails[] }) {
     }
   };
 
+  // si no hay ordenes para mi vendor
+  if (orders.length === 0) {
+    return (
+      <div className="mt-4 p-4 rounded-lg bg-yellow-100 text-yellow-800">
+        <p className="mb-2">No tienes órdenes aún.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4 hidden overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 sm:block">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">

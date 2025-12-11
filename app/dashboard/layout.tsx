@@ -14,8 +14,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const nav: NavItem[] = [
     { name: "Inicio", href: "/dashboard", current: false, icon: <Leaf/> },
-    { name: "Productos", href: "/products", current: false, icon: <ClipboardCheck/> },
-    { name: "Puntos de venta", href: "/pos", current: false, icon: <MapPin/> },
+    { name: "Productos", href: "/dashboard/products", current: false, icon: <ClipboardCheck/> },
+    { name: "Puntos de venta", href: "/dashboard/vendor", current: false, icon: <MapPin/> },
   ];
 
   return <SidebarWithHeader brand={{ name: "Take Away Please" }} nav={nav} currentUser={user}>{children}</SidebarWithHeader>;
