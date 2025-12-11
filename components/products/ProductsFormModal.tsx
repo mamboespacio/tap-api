@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSupabaseUpload } from "@/hooks/use-supabase-upload";
+import { useSupabaseUpload, type UploadedFileInfo } from "@/hooks/useSupabaseUploads";
 import { createProductAction } from "@/app/dashboard/products/actions"; // server action
-import type { UseSupabaseUploadReturn } from "@/hooks/use-supabase-upload";
 
 type CategoryOption = { id: number; name: string };
 type ProductWithCategory = {
@@ -17,7 +16,7 @@ type ProductWithCategory = {
   category_id: number;
   category: { name: string };
   image_url?: string | null;
-  image_path?: string | null; // ahora incluimos el path interno
+  image_path?: string | null;
 };
 
 export default function ProductFormModal({
@@ -31,29 +30,29 @@ export default function ProductFormModal({
 }) {
   const router = useRouter();
 
-  // Hook config (mantener en sync con lo que uses en backend)
-  const BUCKET = "product-images";
-  const PATH = "products";
+  const BUCKET = "tap-production";
+  const PATH = "product-images";
 
   const {
     files,
     setFiles,
-    successes,
+    uploadedFiles,
     loading: uploading,
     errors,
     onUpload,
     getRootProps,
     getInputProps,
     open,
+    removeUploadedFile,
   } = useSupabaseUpload({
     bucketName: BUCKET,
     path: PATH,
     allowedMimeTypes: ["image/*"],
-    maxFileSize: 5 * 1024 * 1024, // 5MB
+    maxFileSize: 5 * 1024 * 1024,
     maxFiles: 1,
     cacheControl: 3600,
     upsert: false,
-  } as UseSupabaseUploadReturn extends any ? any : any); // keep TS happy about the hook return shape
+  } as any);
 
   const [isOpen, setIsOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -70,12 +69,6 @@ export default function ProductFormModal({
     image_url: "" as string | null,
     image_path: "" as string | null,
   });
-
-  // Evitamos hooks condicionales: calculamos preview aquí (no useMemo después de return)
-  const localPreview = form.image_url || (files && files.length > 0 ? (files[0] as any).preview ?? null : null);
-
-  // Track processed success filenames so we only process each once
-  const [processedSuccesses, setProcessedSuccesses] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (productToEdit) {
@@ -96,66 +89,31 @@ export default function ProductFormModal({
       setIsOpen(false);
       setPreviewUrl(null);
       setForm((f) => ({ ...f, image_url: null, image_path: null }));
-      setFiles([]); // limpiar archivos staged en el hook
-      setProcessedSuccesses(new Set());
+      setFiles([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productToEdit, categories]);
 
-  // Cuando se dropea un archivo, el hook actualiza `files`; detectamos y forzamos upload
+  // When files change we trigger upload and use the returned uploadedFiles to populate form
   useEffect(() => {
     if (files.length === 0) return;
+
     (async () => {
       try {
-        await onUpload();
+        const results: UploadedFileInfo[] = await onUpload();
+        if (results && results.length > 0) {
+          const first = results[0];
+          setForm((s) => ({ ...s, image_url: first.publicUrl, image_path: first.path }));
+          setPreviewUrl(first.publicUrl);
+        }
+        // clear staged files (the hook also maintains uploadedFiles)
+        setFiles([]);
       } catch (err) {
-        console.error("onUpload error:", err);
+        console.error("Upload error:", err);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files]);
-
-  // Cuando el hook actualiza `successes` (nombres de archivo subidos), obtenemos publicUrl y seteamos image_path/image_url en el form.
-  useEffect(() => {
-    if (!successes || successes.length === 0) return;
-
-    const unprocessed = successes.filter((name) => !processedSuccesses.has(name));
-    if (unprocessed.length === 0) return;
-
-    // lazy import/create client dentro del effect para evitar bundling innecesario en cliente
-    import("@/lib/supabase/client").then(({ createClient }) => {
-      const supabase = createClient();
-      (async () => {
-        const newProcessed = new Set(processedSuccesses);
-        for (const filename of unprocessed) {
-          try {
-            const filePath = PATH ? `${PATH}/${filename}` : filename;
-            const { data: publicData } = await supabase.storage
-              .from(BUCKET)
-              .getPublicUrl(filePath);
-
-            const publicUrl = publicData?.publicUrl ?? "";
-            if (!publicUrl) {
-              console.error("getPublicUrl returned empty publicUrl for:", filePath);
-              continue;
-            }
-
-            setForm((s) => ({ ...s, image_url: publicUrl, image_path: filePath }));
-            setPreviewUrl(publicUrl);
-            newProcessed.add(filename);
-          } catch (err) {
-            console.error("Error fetching public url:", err);
-          }
-        }
-        setProcessedSuccesses(newProcessed);
-        // ya procesamos los archivos, limpiar staging del hook
-        setFiles([]);
-      })();
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [successes]);
-
-  if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type, checked } = e.target as HTMLInputElement;
@@ -165,11 +123,21 @@ export default function ProductFormModal({
     }));
   };
 
-  const removeImageLocal = () => {
-    // limpia preview y path en el form. Si querés borrar del storage, podríamos usar deleteFile en el hook (necesitaríamos trackear filename/path)
+  const removeImage = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    if (form.image_path) {
+      // try to delete from storage and then clear form
+      const ok = await removeUploadedFile(form.image_path);
+      if (!ok) {
+        alert("No se pudo eliminar la imagen del storage.");
+        return;
+      }
+    }
+
     setForm((s) => ({ ...s, image_url: null, image_path: null }));
     setPreviewUrl(null);
-    setProcessedSuccesses(new Set());
+    setFiles([]);
   };
 
   const handleSave = async () => {
@@ -177,8 +145,14 @@ export default function ProductFormModal({
     setSaving(true);
 
     try {
-      // Preparar payload que espera createProductAction
-      // Nota: createProductAction espera price como number, stock como number, categoryId como number
+      // final sanity: if uploadedFiles has an entry for our image_path, ensure form.image_url is set
+      if (!form.image_url && form.image_path) {
+        const match = uploadedFiles.find((u) => u.path === form.image_path);
+        if (match) {
+          setForm((s) => ({ ...s, image_url: match.publicUrl }));
+        }
+      }
+
       const payload = {
         name: String(form.name),
         description: form.description ?? null,
@@ -189,10 +163,10 @@ export default function ProductFormModal({
         imagePath: form.image_path ?? null,
       };
 
-      // Llamada al server action
+      console.debug("Payload enviado a createProductAction:", payload);
+
       await createProductAction(payload);
 
-      // cerrar modal y refrescar
       onClose();
       router.refresh();
     } catch (err: any) {
@@ -202,6 +176,10 @@ export default function ProductFormModal({
       setSaving(false);
     }
   };
+
+  const localPreview = form.image_url || (files && files.length > 0 ? (files[0] as any).preview ?? null : null);
+
+  const hasPendingUploads = uploading || files.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -237,7 +215,6 @@ export default function ProductFormModal({
             </div>
           </div>
 
-          {/* Dropzone area using hook's getRootProps/getInputProps */}
           <div>
             <label className="block text-sm mb-2">Imagen</label>
 
@@ -257,7 +234,7 @@ export default function ProductFormModal({
                       className="rounded border px-3 py-1 text-sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        removeImageLocal();
+                        removeImage(e);
                       }}
                     >
                       Eliminar
@@ -286,7 +263,9 @@ export default function ProductFormModal({
               )}
             </div>
 
-            <p className="mt-1 text-xs text-gray-500">La imagen se sube a Supabase y su URL pública se guardará en el producto.</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {hasPendingUploads ? "Subiendo imagen... espera antes de guardar." : "La imagen se sube a Supabase y su URL pública se guardará en el producto."}
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-3">
@@ -294,7 +273,7 @@ export default function ProductFormModal({
             <button
               className="rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-60"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || hasPendingUploads}
             >
               {saving ? "Guardando..." : "Guardar"}
             </button>
