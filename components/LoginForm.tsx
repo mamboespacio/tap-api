@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import z from "zod";
-import InputField from "@/components/ui/InputField";
+import InputField from "@/components/ui/InputF";
 import { createClient } from "@/lib/supabase/client";
 
 const LoginSchema = z.object({

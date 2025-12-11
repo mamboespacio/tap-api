@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import InputField from "@/components/ui/InputField";
+import InputField from "@/components/ui/InputF";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
