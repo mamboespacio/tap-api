@@ -1,61 +1,55 @@
-// src/hooks/use-login-form.ts
-
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client"; 
 
-const LoginSchema = z.object({
-  email: z.string().email("Email inválido"),
-  password: z.string().min(1, "Ingresá tu contraseña"),
-});
-
-type LoginInput = z.infer<typeof LoginSchema>;
-
-const supabase = createClient();
+type LoginValues = {
+  email: string;
+  password: string;
+};
 
 export function useLoginForm() {
   const router = useRouter();
-  const search = useSearchParams();
-  const returnTo = search?.get("returnTo") || "/";
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const form = useForm<LoginInput>({
-    resolver: zodResolver(LoginSchema),
-    defaultValues: { email: "", password: "" },
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginValues>();
+
+  const onSubmit = handleSubmit(async (values: LoginValues) => {
+    setServerError(null);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setServerError(json?.error || "Error al iniciar sesión");
+        return;
+      }
+
+      // Leer returnTo si viene en la querystring (ej: /login?returnTo=/dashboard)
+      const params = new URLSearchParams(window.location.search);
+      const returnTo = params.get("returnTo") || "/dashboard";
+
+      // Redirigimos al destino (replace para evitar back al login)
+      router.replace(returnTo);
+    } catch (err: any) {
+      setServerError(err?.message ?? String(err));
+    }
   });
 
-  const onSubmit = async (values: LoginInput) => {
-    setServerError(null);
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: values.email,
-      password: values.password,
-    });
-
-    if (error) {
-      // Mensaje amigable para el error de credenciales incorrectas
-      if (error.message.includes('invalid login credentials')) {
-          setServerError("Email o contraseña incorrectos.");
-      } else {
-          setServerError(error.message || "Error al iniciar sesión");
-      }
-      return;
-    }
-
-    // ✅ Redirección segura con SSR refrescado
-    form.reset();
-    router.replace(returnTo);
-    router.refresh();
-  };
-
   return {
-    ...form, // Expone register, handleSubmit, formState, etc.
+    register,
+    formState: { errors, isSubmitting },
+    onSubmit,
     serverError,
-    onSubmit: form.handleSubmit(onSubmit),
   };
 }

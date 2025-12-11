@@ -36,7 +36,7 @@ export async function GET(req: Request) {
       return new Response(null, {
         status: 302,
         headers: {
-          Location: `/login?returnTo=/api/mercadopago/oauth/start${url.search}`,
+          Location: `/auth/login?returnTo=/api/mercadopago/oauth/start${url.search}`,
         },
       });
     }

@@ -1,4 +1,4 @@
-// src/app/login/page.tsx
+// src/app/auth/login/page.tsx
 "use client";
 
 import { Suspense } from 'react';
@@ -13,7 +13,7 @@ export default function LoginPage() {
       </Suspense>
       <p className="text-sm">
         ¿No tenés cuenta?{" "}
-        <a className="underline" href="/register">
+        <a className="underline" href="/auth/register">
           Crear cuenta
         </a>
       </p>

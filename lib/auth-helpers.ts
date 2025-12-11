@@ -1,36 +1,34 @@
-// lib/auth-helpers.ts
-
 import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 /**
- * Obtiene la sesión del usuario o redirige a la página de inicio de sesión.
- * @returns El objeto de sesión y usuario si está autenticado.
+ * Obtiene el usuario autenticado en el servidor o redirige a /login.
+ * Usa supabase.auth.getUser() (que valida la sesión con el servidor de Auth).
  */
 export async function getSessionOrRedirect() {
+  // cookies() es síncrono en next/headers
   const cookieStore = cookies();
-  // Ajusta createClient si necesita el cookieStore como argumento:
-  // const supabase = await createClient(cookieStore); 
-  const supabase = await createClient(); 
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  // Pasamos el mismo cookieStore a createClient para que use las mismas cookies
+  const supabase = createClient(cookieStore);
 
-  if (!session?.user?.id) {
-    // Redirige al usuario si no hay sesión activa
-    redirect(`/login?returnTo=${encodeURIComponent((await cookies()).get('next-url')?.value || '/')}`);
+  // Obtener user validado por Supabase Auth (no solo lo que hay en la cookie)
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    // Si existe una cookie 'next-url' la usamos como returnTo, si no usamos '/'
+    const returnTo = cookieStore.get('next-url')?.value ?? '/';
+    redirect(`/login?returnTo=${encodeURIComponent(returnTo)}`);
   }
 
-  return { session, user: session.user };
+  return { user };
 }
 
 /**
  * Obtiene solo el ID del usuario o redirige.
- * @returns El ID del usuario si está autenticado.
  */
 export async function getUserIdOrRedirect() {
-    const { user } = await getSessionOrRedirect();
-    return user.id;
+  const { user } = await getSessionOrRedirect();
+  return user.id;
 }

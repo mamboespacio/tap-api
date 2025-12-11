@@ -1,8 +1,7 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { OrderStatus, PrismaClient, Role } from "@prisma/client";
-import { createClient as createServerSupabaseClient } from "@/lib/supabase/server"; 
+import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
 
 const prisma = new PrismaClient();
 
@@ -19,22 +18,22 @@ interface VendorRegistrationData {
 }
 
 interface ProductData {
-    name: string;
-    description?: string | null
-    price: number;
-    stock: number;
-    categoryId: number;
-    imageUrl?: string | null;
+  name: string;
+  description?: string | null
+  price: number;
+  stock: number;
+  categoryId: number;
+  imageUrl?: string | null;
 }
 
 
 // --- FLUJO 2: Crear y Asociar Vendor (sin cambios, usa prisma) ---
 async function createVendorProfile(userId: string, data: VendorRegistrationData) {
-  await prisma.user.update({
+  await prisma.profile.update({
     where: { id: userId },
     data: {
       role: Role.VENDOR,
-      fullName: data.fullName,
+      full_name: data.fullName,
       dni: data.dni,
     },
   });
@@ -43,7 +42,7 @@ async function createVendorProfile(userId: string, data: VendorRegistrationData)
     data: {
       name: data.vendorName,
       address: data.vendorAddress || "Av. Siempre Viva 742",
-      ownerId: userId,
+      owner_id: userId,
     },
   });
 }
@@ -51,7 +50,7 @@ async function createVendorProfile(userId: string, data: VendorRegistrationData)
 // --- FLUJO 1: Registrar y Login de Vendors (Server Action principal) ---
 export async function registerVendorAction(data: VendorRegistrationData) {
   // Usamos la función asíncrona para obtener el cliente
-  const supabase = await createServerSupabaseClient(); 
+  const supabase = await createServerSupabaseClient();
 
   try {
     // 1. Registrar usuario en Supabase Auth
@@ -61,14 +60,14 @@ export async function registerVendorAction(data: VendorRegistrationData) {
     });
 
     if (signUpError) {
-        throw new Error(signUpError.message);
+      throw new Error(signUpError.message);
     }
 
     const userId = authData.user!.id;
 
     // 2. Usar Prisma para crear el Vendor de forma segura (Server-side)
     await createVendorProfile(userId, data);
-    
+
     return { success: true, message: "Vendor registrado exitosamente." };
 
   } catch (error: any) {
@@ -81,100 +80,103 @@ export async function registerVendorAction(data: VendorRegistrationData) {
 // --- FLUJO 3: CRUD Products ---
 
 export async function createProductAction(data: ProductData) {
-    // Usamos la función asíncrona para obtener el cliente
-    const supabase = await createServerSupabaseClient(); 
-    const { data: { user } } = await supabase.auth.getUser();
+  // Usamos la función asíncrona para obtener el cliente
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) throw new Error("No autenticado.");
+  if (!user) throw new Error("No autenticado.");
 
-    // ... (El resto de la lógica de Prisma sin cambios) ...
-    const vendorProfile = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { role: true, vendorsOwned: { select: { id: true } } }
-    });
+  // ... (El resto de la lógica de Prisma sin cambios) ...
+  const vendorProfile = await prisma.profile.findUnique({
+    where: { id: user.id },
+    select: { role: true, vendors_owned: { select: { id: true } } }
+  });
 
-    if (vendorProfile?.role !== Role.VENDOR || vendorProfile.vendorsOwned.length === 0) {
-        throw new Error("Acceso denegado. No eres un vendedor activo.");
+  if (vendorProfile?.role !== Role.VENDOR || vendorProfile.vendors_owned.length === 0) {
+    throw new Error("Acceso denegado. No eres un vendedor activo.");
+  }
+
+  const vendorId = vendorProfile.vendors_owned[0].id; // Corregir acceso a ID
+
+  await prisma.product.create({
+    data: {
+      name: data.name,
+      description: data.description,
+      price: parseFloat(data.price.toFixed(2)),
+      stock: data.stock,
+      category_id: data.categoryId,
+      image_url: data.imageUrl,
+      vendor_id: vendorId,
     }
+  });
 
-    const vendorId = vendorProfile.vendorsOwned[0].id; // Corregir acceso a ID
-
-    await prisma.product.create({
-        data: {
-            ...data,
-            vendorId: vendorId,
-            price: parseFloat(data.price.toFixed(2)),
-            imageUrl: data.imageUrl,
-        }
-    });
-
-    return { success: true };
+  return { success: true };
 }
 
 export async function deleteProductAction(productId: number) {
-    // Usamos la función asíncrona para obtener el cliente
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
+  // Usamos la función asíncrona para obtener el cliente
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) throw new Error("No autenticado.");
+  if (!user) throw new Error("No autenticado.");
 
-    // ... (El resto de la lógica de Prisma sin cambios) ...
-    const product = await prisma.product.findUnique({ where: { id: productId } });
-    const isOwner = await prisma.vendor.findFirst({ where: { id: product?.vendorId, ownerId: user.id } });
+  // ... (El resto de la lógica de Prisma sin cambios) ...
+  const product = await prisma.product.findUnique({ where: { id: productId } });
+  const isOwner = await prisma.vendor.findFirst({ where: { id: product?.vendor_id, owner_id: user.id } });
 
-    if (!isOwner) throw new Error("No tienes permiso para eliminar este producto.");
+  if (!isOwner) throw new Error("No tienes permiso para eliminar este producto.");
 
-    await prisma.product.delete({ where: { id: productId } });
+  await prisma.product.delete({ where: { id: productId } });
 
-    return { success: true };
+  return { success: true };
 }
 
 interface UpdateProductData extends Omit<ProductData, 'categoryId'> {
-    productId: number;
-    categoryId?: number; // Hacemos la categoría opcional en la actualización
-    active?: boolean;
+  productId: number;
+  categoryId?: number; // Hacemos la categoría opcional en la actualización
+  active?: boolean;
 }
 
 export async function updateProductAction(data: UpdateProductData) {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) throw new Error("No autenticado.");
+  if (!user) throw new Error("No autenticado.");
 
-    // Verificar si el usuario es el dueño del producto
-    const product = await prisma.product.findUnique({ where: { id: data.productId } });
-    
-    if (!product) throw new Error("Producto no encontrado.");
+  // Verificar si el usuario es el dueño del producto
+  const product = await prisma.product.findUnique({ where: { id: data.productId } });
 
-    const isOwner = await prisma.vendor.findFirst({ 
-        where: { 
-            id: product.vendorId, 
-            ownerId: user.id 
-        } 
-    });
+  if (!product) throw new Error("Producto no encontrado.");
 
-    if (!isOwner) throw new Error("No tienes permiso para editar este producto.");
-
-    // Preparar los datos para la actualización
-    const updateData: any = {
-        name: data.name,
-        description: data.description, // Ahora acepta string | null
-        price: data.price !== undefined ? parseFloat(data.price.toFixed(2)) : undefined,
-        stock: data.stock,
-        active: data.active,
-        imageUrl: data.imageUrl, // Ahora acepta string | null
-    };
-
-    if (data.categoryId) {
-        updateData.categoryId = data.categoryId;
+  const isOwner = await prisma.vendor.findFirst({
+    where: {
+      id: product.vendor_id,
+      owner_id: user.id
     }
+  });
 
-    await prisma.product.update({
-        where: { id: data.productId },
-        data: updateData,
-    });
+  if (!isOwner) throw new Error("No tienes permiso para editar este producto.");
 
-    return { success: true };
+  // Preparar los datos para la actualización
+  const updateData: any = {
+    name: data.name,
+    description: data.description, // Ahora acepta string | null
+    price: data.price !== undefined ? parseFloat(data.price.toFixed(2)) : undefined,
+    stock: data.stock,
+    active: data.active,
+    imageUrl: data.imageUrl, // Ahora acepta string | null
+  };
+
+  if (data.categoryId) {
+    updateData.categoryId = data.categoryId;
+  }
+
+  await prisma.product.update({
+    where: { id: data.productId },
+    data: updateData,
+  });
+
+  return { success: true };
 }
 
 // --- FLUJO 4: Crear Orden ---
@@ -188,17 +190,17 @@ export async function createOrderAction(data: any) {
   const order = await prisma.$transaction(async (tx) => {
     // Reducir el stock (bloquear productos)
     for (const item of data.products) {
-        await tx.product.update({
-            where: { id: item.productId },
-            data: { stock: { decrement: item.quantity } },
-        });
+      await tx.product.update({
+        where: { id: item.productId },
+        data: { stock: { decrement: item.quantity } },
+      });
     }
 
     // Crear la orden principal
     return tx.order.create({
       data: {
-        userId: user.id,
-        vendorId: data.vendorId,
+        profile_id: user.id,
+        vendor_id: data.vendorId,
         price: data.totalAmount,
         status: OrderStatus.PENDING,
         products: { create: data.orderProductsData },
@@ -208,15 +210,15 @@ export async function createOrderAction(data: any) {
 
   // 3. Crear preferencia de Mercado Pago (usando SDK si lo tienes, o fetch)
   // Nota: Esto requiere tus credenciales SECRETAS, mejor en una API Route dedicada si el SDK es complejo
-  
+
   // Para simplicidad, devolvemos datos para que la app cliente genere la preferencia
-  const result = { 
-      success: true, 
-      orderId: order.id,
-      items: data.itemsForMP, 
-      userId: user.id
+  const result = {
+    success: true,
+    orderId: order.id,
+    items: data.itemsForMP,
+    userId: user.id
   };
-  
+
   return result;
 }
 
@@ -226,36 +228,36 @@ export async function createOrderAction(data: any) {
 // import { PrismaClient, Role, OrderStatus } from "@prisma/client";
 
 interface UpdateOrderStatusData {
-    orderId: number;
-    status: OrderStatus;
+  orderId: number;
+  status: OrderStatus;
 }
 
 export async function updateOrderStatusAction(data: UpdateOrderStatusData) {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user) throw new Error("No autenticado.");
+  if (!user) throw new Error("No autenticado.");
 
-    // 1. Verificar si la orden existe y si pertenece al vendedor
-    const order = await prisma.order.findUnique({ where: { id: data.orderId } });
+  // 1. Verificar si la orden existe y si pertenece al vendedor
+  const order = await prisma.order.findUnique({ where: { id: data.orderId } });
 
-    if (!order) throw new Error("Orden no encontrada.");
-    
-    // Verificar propiedad: buscar si el usuario es dueño del vendedor de esta orden
-    const isOwner = await prisma.vendor.findFirst({
-        where: {
-            id: order.vendorId,
-            ownerId: user.id,
-        }
-    });
+  if (!order) throw new Error("Orden no encontrada.");
 
-    if (!isOwner) throw new Error("No tienes permiso para editar esta orden.");
+  // Verificar propiedad: buscar si el usuario es dueño del vendedor de esta orden
+  const isOwner = await prisma.vendor.findFirst({
+    where: {
+      id: order.vendor_id,
+      owner_id: user.id,
+    }
+  });
 
-    // 2. Actualizar el estado de la orden
-    await prisma.order.update({
-        where: { id: data.orderId },
-        data: { status: data.status },
-    });
+  if (!isOwner) throw new Error("No tienes permiso para editar esta orden.");
 
-    return { success: true, message: `Orden ${data.orderId} actualizada a ${data.status}` };
+  // 2. Actualizar el estado de la orden
+  await prisma.order.update({
+    where: { id: data.orderId },
+    data: { status: data.status },
+  });
+
+  return { success: true, message: `Orden ${data.orderId} actualizada a ${data.status}` };
 }

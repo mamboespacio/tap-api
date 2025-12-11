@@ -6,48 +6,74 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email            String    @unique
-  password         String?
-  fullName         String?
-  dni              String?
-  role             Role      @default(CUSTOMER)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  addresses        Address[]
-  orders           Order[]
-  vendorsOwned     Vendor[]  @relation("VendorOwner")
-  favouriteVendors Vendor[]  @relation("FavouriteVendors")
+// Renombrado de Profile a Profile
+model Profile {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String   @unique
+  // Campos que probablemente quieras eliminar/manejar de otra forma si solo usas Supabase Auth:
+  password   String? // <-- Considera si esto pertenece aquí o solo en auth.profiles
+  full_name  String?
+  dni        String?
+  role       Role     @default(CUSTOMER)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relaciones actualizadas para apuntar a Profile
+  addresses          Address[]
+  orders             Order[]
+  vendors_owned      Vendor[]                 @relation("vendor_owner")
+  profile_favourites ProfileFavouriteVendor[]
+
+  @@map("profiles") // Mapea a la nueva tabla 'profiles' en la BD
 }
 
 model Vendor {
-  id           Int        @id @default(autoincrement())
-  name         String     @unique
-  address      String     @default("Av. Siempre Viva 742")
-  openingHours DateTime   @default(dbgenerated("'1970-01-01 10:00:00'::timestamp without time zone"))
-  closingHours DateTime   @default(dbgenerated("'1970-01-01 18:00:00'::timestamp without time zone"))
-  ownerId      String     @db.Uuid
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  mpAccount    MpAccount?
-  orders       Order[]
-  products     Product[]
-  owner        User       @relation("VendorOwner", fields: [ownerId], references: [id])
-  favouritedBy User[]     @relation("FavouriteVendors")
+  id                      Int                      @id @default(autoincrement())
+  name                    String                   @unique
+  address                 String                   @default("Av. Siempre Viva 742")
+  opening_hours           DateTime                 @default(dbgenerated("'1970-01-01 10:00:00'::timestamp without time zone"))
+  closing_hours           DateTime                 @default(dbgenerated("'1970-01-01 18:00:00'::timestamp without time zone"))
+  owner_id                String                   @db.Uuid
+  created_at              DateTime                 @default(now())
+  updated_at              DateTime                 @updatedAt
+  mp_account              MpAccount?
+  orders                  Order[]
+  products                Product[]
+  // Relación actualizada
+  owner                   Profile                  @relation("vendor_owner", fields: [owner_id], references: [id])
+  profileFavouriteVendors ProfileFavouriteVendor[]
+
+  @@map("vendors")
+}
+
+model ProfileFavouriteVendor {
+  id         Int      @id @default(autoincrement())
+  profile_id String   @db.Uuid
+  vendor_id  Int
+  created_at DateTime @default(now())
+
+  // Relaciones actualizadas
+  profile Profile @relation(fields: [profile_id], references: [id])
+  vendor  Vendor  @relation(fields: [vendor_id], references: [id])
+
+  @@unique([profile_id, vendor_id])
+  @@index([profile_id])
+  @@index([vendor_id])
+  @@map("profile_favourite_vendors")
 }
 
 model MpAccount {
-  id             Int       @id @default(autoincrement())
-  vendorId       Int       @unique
-  mpUserId       String
-  accessToken    String
-  refreshToken   String?
-  liveMode       Boolean   @default(true)
-  tokenExpiresAt DateTime?
-  vendor         Vendor    @relation(fields: [vendorId], references: [id])
+  id               Int       @id @default(autoincrement())
+  vendor_id        Int       @unique
+  mp_profile_id    String
+  access_token     String
+  refresh_token    String?
+  live_mode        Boolean   @default(true)
+  token_expires_at DateTime?
+  vendor           Vendor    @relation(fields: [vendor_id], references: [id])
 
-  @@index([mpUserId])
+  @@index([mp_profile_id])
+  @@map("mp_accounts")
 }
 
 model Category {
@@ -55,6 +81,8 @@ model Category {
   name     String
   slug     String    @unique
   products Product[]
+
+  @@map("categories")
 }
 
 model Product {
@@ -64,64 +92,70 @@ model Product {
   price       Float
   stock       Int            @default(0)
   active      Boolean        @default(true)
-  imageUrl    String?
-  vendorId    Int
-  categoryId  Int
-  createdAt   DateTime       @default(now())
+  image_url   String?
+  vendor_id   Int
+  category_id Int
+  created_at  DateTime       @default(now())
   orders      OrderProduct[]
-  category    Category       @relation(fields: [categoryId], references: [id])
-  vendor      Vendor         @relation(fields: [vendorId], references: [id])
+  category    Category       @relation(fields: [category_id], references: [id])
+  vendor      Vendor         @relation(fields: [vendor_id], references: [id])
 
-  @@index([vendorId])
-  @@index([categoryId])
+  @@index([vendor_id])
+  @@index([category_id])
+  @@map("products")
 }
 
 model Order {
-  id             Int            @id @default(autoincrement())
-  userId         String         @db.Uuid
-  vendorId       Int
-  price          Float
-  status         OrderStatus    @default(PENDING)
-  externalRef    String?
-  preferenceId   String?
-  paymentId      String?
-  marketplaceFee Float?
-  createdAt      DateTime       @default(now())
-  user           User           @relation(fields: [userId], references: [id])
-  vendor         Vendor         @relation(fields: [vendorId], references: [id])
-  products       OrderProduct[]
+  id              Int            @id @default(autoincrement())
+  profile_id      String         @db.Uuid
+  vendor_id       Int
+  price           Float
+  status          OrderStatus    @default(PENDING)
+  external_ref    String?
+  preference_id   String?
+  payment_id      String?
+  marketplace_fee Float?
+  created_at      DateTime       @default(now())
+  // Relación actualizada
+  profile         Profile        @relation(fields: [profile_id], references: [id])
+  vendor          Vendor         @relation(fields: [vendor_id], references: [id])
+  products        OrderProduct[]
 
-  @@index([vendorId])
-  @@index([userId])
+  @@index([vendor_id])
+  @@index([profile_id])
   @@index([status])
-  @@index([preferenceId])
-  @@index([paymentId])
+  @@index([preference_id])
+  @@index([payment_id])
+  @@map("orders")
 }
 
 model OrderProduct {
-  id        Int     @id @default(autoincrement())
-  orderId   Int
-  productId Int
-  quantity  Int
-  order     Order   @relation(fields: [orderId], references: [id])
-  product   Product @relation(fields: [productId], references: [id])
+  id         Int     @id @default(autoincrement())
+  order_id   Int
+  product_id Int
+  quantity   Int
+  order      Order   @relation(fields: [order_id], references: [id])
+  product    Product @relation(fields: [product_id], references: [id])
 
-  @@index([orderId])
-  @@index([productId])
+  @@index([order_id])
+  @@index([product_id])
+  @@map("order_products")
 }
 
 model Address {
-  id          Int      @id @default(autoincrement())
-  userId      String   @db.Uuid
-  name        String
-  fullAddress String
-  latitude    Float
-  longitude   Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           Int      @id @default(autoincrement())
+  profile_id   String   @db.Uuid
+  name         String
+  full_address String
+  latitude     Float
+  longitude    Float
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  // Relación actualizada
+  profile      Profile  @relation(fields: [profile_id], references: [id], onDelete: Cascade)
 
   @@index([latitude, longitude])
+  @@map("addresses")
 }
 
 enum OrderStatus {

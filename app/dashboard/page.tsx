@@ -1,42 +1,50 @@
 // src/app/dashboard-vendor/page.tsx (Server Component)
 
 import OrderList from "@/components/OrdersList";
-import { createClient as createServerSupabaseClient } from "@/lib/supabase/server"; // Tu cliente de servidor personalizado
+import { getSessionOrRedirect } from "@/lib/auth-helpers";
+import { createClient } from "@/lib/supabase/server";
 import { PrismaClient } from '@prisma/client';
 import Link from 'next/link';
+import { redirect } from "next/navigation";
 
 const prisma = new PrismaClient();
 
 export default async function VendorDashboardPage() {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
 
-  if (!user) {
-    // Redirigir si no está logueado (puedes usar redirect() de next/navigation si prefieres)
-    return <p>Por favor, inicia sesión para ver el dashboard.</p>;
+  if (error || !data?.claims) {
+    redirect("/auth/login");
   }
+  const user = data.claims;
 
   // Cargar datos del Vendor y si tiene cuenta de MP asociada
   const vendor = await prisma.vendor.findFirst({
-    where: { ownerId: user.id },
-    include: { mpAccount: true }, // Incluir la cuenta de Mercado Pago asociada
+    where: { owner_id: user.id },
+    include: { mp_account: true }, // Incluir la cuenta de Mercado Pago asociada
   });
 
   if (!vendor) {
-    return <p>Perfil de vendedor no encontrado.</p>;
+    return (
+      <div className="bg-red-100 text-red-700 p-4 rounded-lg">
+        <p className="font-bold">Perfil de vendedor no encontrado</p>
+        <p>Ponte en contacto con el administrador para solucionar este problema.</p>
+      </div>
+    )
   }
 
   // Obtener las órdenes del vendedor, incluyendo detalles del usuario y productos
   const orders = await prisma.order.findMany({
-    where: { vendorId: vendor.id },
+    where: { vendor_id: vendor.id },
     include: {
-      user: { select: { fullName: true, email: true } },
+      profile: { select: { full_name: true, email: true } },
       products: {
         include: { product: { select: { name: true } } }
       }
     },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { created_at: 'desc' }
   });
+
 
   return (
     <div className="p-6">
@@ -45,14 +53,14 @@ export default async function VendorDashboardPage() {
 
       <section className="mt-8 p-4 border rounded-lg">
         <h2 className="text-xl font-semibold mb-3">Integración con Mercado Pago</h2>
-        
-        {vendor.mpAccount ? (
-          <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4">
+
+        {vendor.mp_account ? (
+          <div className="bg-green-100 text-green-700 p-4 rounded-lg">
             <p className="font-bold">¡Conectado con Mercado Pago!</p>
-            <p>ID de usuario de MP: {vendor.mpAccount.mpUserId}</p>
+            <p>ID de usuario de MP: {vendor.mp_account.mp_profile_id}</p>
           </div>
         ) : (
-          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4">
+          <div className="bg-yellow-100 text-yellow-700 p-4 rounded-lg">
             <p className="font-bold">No conectado</p>
             <p>Conecta tu cuenta de Mercado Pago para recibir pagos por tus pedidos.</p>
             {/* El link llama a la nueva ruta de API que crearemos a continuación */}

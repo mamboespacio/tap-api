@@ -1,19 +1,17 @@
-'use client';
-import { useLoginForm } from '@/hooks/use-login-form';
-import InputField from './ui/inputField';
+"use client";
+import { useLoginForm } from "@/hooks/use-login-form";
+import InputField from './ui/InputField';
 
 export default function LoginFormContainer() {
-  // Obtenemos los métodos del hook
-    const {
-      register,
-      formState: { errors, isSubmitting },
-      onSubmit,
-      serverError,
-    } = useLoginForm();
-  // ... el resto de tu UI de formulario que usa register, handleSubmit, etc.
+  const {
+    register,
+    formState: { errors, isSubmitting },
+    onSubmit,
+    serverError,
+  } = useLoginForm();
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      {/* Usamos InputField o la estructura de div/label/input */}
       <InputField
         label="Email"
         type="email"

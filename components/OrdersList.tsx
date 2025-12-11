@@ -11,8 +11,8 @@ type OrderWithDetails = {
   id: number;
   price: number;
   status: OrderStatus;
-  createdAt: Date;
-  user: { fullName: string | null; email: string };
+  created_at: Date;
+  profile: { full_name: string | null; email: string };
   products: { quantity: number; product: { name: string } }[];
 };
 
@@ -50,9 +50,9 @@ export default function OrderList({ orders }: { orders: OrderWithDetails[] }) {
           {orders.map((order) => (
             <tr key={order.id}>
               <td className="py-2 px-4 border-b">{order.id}</td>
-              <td className="py-2 px-4 border-b">{order.user.fullName || order.user.email}</td>
+              <td className="py-2 px-4 border-b">{order.profile.full_name || order.profile.email}</td>
               <td className="py-2 px-4 border-b">${order.price.toFixed(2)}</td>
-              <td className="py-2 px-4 border-b">{new Date(order.createdAt).toLocaleDateString()}</td>
+              <td className="py-2 px-4 border-b">{new Date(order.created_at).toLocaleDateString()}</td>
               <td className="py-2 px-4 border-b">
                 {order.products.map(op => `${op.quantity}x ${op.product.name}`).join(', ')}
               </td>

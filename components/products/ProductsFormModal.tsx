@@ -1,7 +1,6 @@
-// src/components/ProductFormModal.tsx (Client Component)
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -49,11 +48,23 @@ export default function ProductFormModal({ categories, productToEdit, onClose }:
   const [isOpen, setIsOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const router = useRouter();
-  const supabase = createClient(); // Cliente de supabase client-side
-  const defaultValues = productToEdit || { stock: 0, price: 0, name: '', description: null, imageUrl: null };
+
+  // Memoizar la creación del cliente para evitar crear una nueva instancia en cada render
+  const supabase = useMemo(() => createClient(), []);
 
   // Definimos un tipo de formulario que incluye el FileList para el hook, pero no para Zod
-  type FormValuesWithFile = ProductInput & { imageFile: FileList };
+  type FormValuesWithFile = ProductInput & { imageFile?: FileList };
+
+  // Valores por defecto del formulario (usamos nombres en camelCase que espera el formulario)
+  const initialDefaultValues: FormValuesWithFile = {
+    name: '',
+    description: '',
+    price: 0,
+    stock: 0,
+    categoryId: undefined as unknown as number,
+    imageUrl: null,
+    imageFile: undefined,
+  };
 
   const { 
     register, 
@@ -63,31 +74,40 @@ export default function ProductFormModal({ categories, productToEdit, onClose }:
     getValues 
   } = useForm<FormValuesWithFile>({
     resolver: zodResolver(ProductSchema) as any, // Forzamos 'any' en el resolver por el campo FileList
-    defaultValues: {
-      ...defaultValues,
-      price: productToEdit ? productToEdit.price : 0,
-      stock: productToEdit ? productToEdit.stock : 0,
-      categoryId: productToEdit ? productToEdit.categoryId : undefined,
-    } as unknown as FormValuesWithFile, 
+    defaultValues: initialDefaultValues,
   });
 
   // Sincronizar el estado del modal y los valores si se abre para editar
+  // Usamos productToEdit?.id como dependencia para evitar re-ejecuciones por identidad del objeto
   useEffect(() => {
+    // Cuando cambia el producto a editar, abrir o cerrar el modal y resetear el formulario.
     if (productToEdit) {
       setIsOpen(true);
+      // Mapear campos de productToEdit (snake_case o camelCase) a los del formulario
       reset({
-        ...productToEdit,
-        description: productToEdit.description ?? '', // Asegurar que sea string o undefined
+        name: productToEdit.name ?? '',
+        description: productToEdit.description ?? null,
+        price: (productToEdit as any).price ?? 0,
+        stock: (productToEdit as any).stock ?? 0,
+        categoryId: (productToEdit as any).category_id ?? (productToEdit as any).categoryId ?? undefined,
+        imageUrl: (productToEdit as any).imageUrl ?? (productToEdit as any).image_url ?? null,
+        imageFile: undefined,
       });
     } else {
-      reset({ stock: 0, price: 0, name: '', description: '', imageFile: undefined });
+      // Si productToEdit es null/undefined, resetear a valores iniciales y cerrar el modal
+      reset(initialDefaultValues);
+      setIsOpen(false);
     }
-  }, [productToEdit, reset]);
+    // Dependemos solo del id del producto para evitar re-ejecuciones causadas
+    // por funciones con identidad inestable como `reset`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productToEdit?.id]);
 
   const handleClose = () => {
+    // Cerrar localmente y resetear formulario
     setIsOpen(false);
-    reset();
-    if (onClose) onClose(); // Llamar al manejador del padre si existe
+    reset(initialDefaultValues);
+    if (onClose) onClose(); // Avisar al padre para que, por ejemplo, ponga productToEdit a null
   };
 
   const uploadImage = async (file: File): Promise<string> => {
@@ -110,7 +130,9 @@ export default function ProductFormModal({ categories, productToEdit, onClose }:
   // Definimos el handler de submit con el tipo correcto que RHF espera (FormValuesWithFile)
   const onSubmit: SubmitHandler<FormValuesWithFile> = async (values) => {
     try {
-      let imageUrl: string | null = productToEdit?.imageUrl ?? null;
+      // Producto editado puede venir con imageUrl o image_url (mapear ambos)
+      const existingImageUrl = (productToEdit as any)?.imageUrl ?? (productToEdit as any)?.image_url ?? null;
+      let imageUrl: string | null = existingImageUrl;
 
       // Usamos getValues() para acceder al FileList
       const files = getValues("imageFile"); 
@@ -121,10 +143,17 @@ export default function ProductFormModal({ categories, productToEdit, onClose }:
       }
 
       // Preparamos los datos finales para la Server Action (que espera ProductInput)
-      const finalValues: ProductInput = { ...values, imageUrl };
+      const finalValues: ProductInput = { 
+        name: values.name,
+        description: values.description ?? null,
+        price: Number(values.price),
+        stock: Number(values.stock),
+        categoryId: Number(values.categoryId),
+        imageUrl: imageUrl ?? null,
+      };
 
       if (productToEdit) {
-        await updateProductAction({ ...finalValues, productId: productToEdit.id });
+        await updateProductAction({ ...finalValues, productId: (productToEdit as any).id });
         alert("Producto actualizado exitosamente");
       } else {
         await createProductAction(finalValues);
@@ -133,7 +162,7 @@ export default function ProductFormModal({ categories, productToEdit, onClose }:
       handleClose(); 
       router.refresh(); 
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      alert(`Error: ${error?.message ?? String(error)}`);
     }
   };
 
@@ -197,7 +226,9 @@ export default function ProductFormModal({ categories, productToEdit, onClose }:
                     {...register("imageFile")} 
                     className="w-full border p-2 rounded" 
                 />
-                {productToEdit?.imageUrl && !uploading && <p className="text-sm mt-1">Imagen actual cargada.</p>}
+                {(productToEdit && ((productToEdit as any).image_url || (productToEdit as any).imageUrl)) && !uploading && (
+                  <p className="text-sm mt-1">Imagen actual cargada.</p>
+                )}
                 {uploading && <p className="text-sm mt-1">Subiendo imagen...</p>}
               </div>
 

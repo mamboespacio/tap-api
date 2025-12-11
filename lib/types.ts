@@ -54,16 +54,13 @@ export interface Vendor {
 }
 export interface Product {
   id: number;
-  documentId: string;
   name: string;
   slug: string;
   description: string;
   price: number;
-  salePrice: string;
-  onSale: boolean;
   vendor: Vendor;
   stock: number | null;
-  imageUrl: string | null;
+  image_url: string | null;
 }
 export interface CartItem {
   product: Product,
