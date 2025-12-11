@@ -23,10 +23,10 @@ export async function POST(req: NextRequest) {
 
     // 2. Buscar la orden y verificar que pertenece al usuario
     const order = await db.order.findUnique({
-      where: { id: orderId, userId: user.id }, // Seguridad: debe ser su orden
+      where: { id: orderId, profile_id: user.id }, // Seguridad: debe ser su orden
       include: {
         products: { include: { product: true } },
-        user: true, // Ya tenemos 'user' de authenticateUser, pero lo necesitamos para email MP
+        profile: true, // Ya tenemos 'user' de authenticateUser, pero lo necesitamos para email MP
         vendor: true,
       },
     });
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     const preference = await new Preference(client).create({
       body: {
         items,
-        payer: { email: order.user.email ?? undefined },
+        payer: { email: order.profile.email ?? undefined },
         back_urls: { /* ... urls de retorno ... */ },
         auto_return: "approved",
         external_reference: orderId.toString(),
@@ -74,11 +74,11 @@ export async function POST(req: NextRequest) {
     // 6. Guardar preferenceId en la orden y devolver respuesta consistente
     await db.order.update({
       where: { id: orderId },
-      data: { preferenceId: preference.id },
+      data: { preference_id: preference.id },
     });
 
     return NextResponse.json(
-        { preferenceId: preference.id, order },
+        { preference_id: preference.id, order },
         { status: 200, headers: corsHeaders }
     );
     
