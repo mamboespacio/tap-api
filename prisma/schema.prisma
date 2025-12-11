@@ -4,6 +4,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // Asegúrate de que esta URL apunte a tu base de datos Supabase
+  url      = env("DIRECT_URL")
 }
 
 // Renombrado de Profile a Profile
