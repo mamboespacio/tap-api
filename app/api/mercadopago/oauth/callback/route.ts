@@ -79,7 +79,7 @@ export async function GET(req: Request) {
       where: { id: Number(vendorId) },
     });
 
-    if (!vendor || vendor.ownerId !== session.user.id) {
+    if (!vendor || vendor.owner_id !== session.user.id) {
       return new Response(
         JSON.stringify({ error: "Vendor no pertenece al usuario" }),
         {
@@ -119,21 +119,21 @@ export async function GET(req: Request) {
         : null;
 
     await db.mpAccount.upsert({
-      where: { vendorId: Number(vendorId) },
+      where: { vendor_id: Number(vendorId) },
       update: {
-        mpUserId: String(data.user_id),
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token ?? null,
-        liveMode: !!data.live_mode,
-        tokenExpiresAt: expiresAt,
+        mp_profile_id: String(data.user_id),
+        access_token: data.access_token,
+        refresh_token: data.refresh_token ?? null,
+        live_mode: !!data.live_mode,
+        token_expires_at: expiresAt,
       },
       create: {
-        vendorId: Number(vendorId),
-        mpUserId: String(data.user_id),
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token ?? null,
-        liveMode: !!data.live_mode,
-        tokenExpiresAt: expiresAt,
+        vendor_id: Number(vendorId),
+        mp_profile_id: String(data.user_id),
+        access_token: data.access_token,
+        refresh_token: data.refresh_token ?? null,
+        live_mode: !!data.live_mode,
+        token_expires_at: expiresAt,
       },
     });
 

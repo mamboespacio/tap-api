@@ -43,7 +43,7 @@ export async function GET(req: Request) {
 
     // 2️⃣ Validar que el vendor pertenezca al usuario
     const vendor = await db.vendor.findUnique({ where: { id: vendorId } });
-    if (!vendor || vendor.ownerId !== user.id) { // ✅ Se usa user.id de la validación segura
+    if (!vendor || vendor.owner_id !== user.id) { // ✅ Se usa user.id de la validación segura
       return new Response("Vendor inválido", { status: 403 });
     }
 
