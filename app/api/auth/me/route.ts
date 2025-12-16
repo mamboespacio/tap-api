@@ -1,11 +1,11 @@
 export const runtime = 'nodejs';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse, } from 'next/server';
 import db from '@/lib/prisma';
 import { authenticateUser, corsHeaders } from '@/lib/authHelper';
 
-export async function GET() {
-  const authResult = await authenticateUser();
+export async function GET(req: NextRequest) {
+  const authResult = await authenticateUser(req);
   if (authResult instanceof Response) return authResult;
 
   const user = authResult;
