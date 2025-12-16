@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
           failure: `${baseUrl}/payment/failure`,
           pending: `${baseUrl}/payment/pending`,
         },
+        notification_url: `${baseUrl}/api/mercadopago/webhook`,
         auto_return: "approved",
         external_reference: orderId.toString(),
         marketplace: "Tap",
