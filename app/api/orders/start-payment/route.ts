@@ -1,19 +1,18 @@
-// app/api/orders/start-payment/route.ts
+// app/api/orders/start-payment/route.ts (CORREGIDO)
 
-export const runtime = 'nodejs'; // Aseguramos runtime Node.js
+export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/prisma";
 import { MercadoPagoConfig, Preference } from "mercadopago";
-import { authenticateUser, corsHeaders } from "@/lib/authHelper"; // Usamos helper
-import { getValidMercadoPagoAccessToken } from "@/lib/mp-oauth"; // Usamos helper MP
+import { authenticateUser, corsHeaders } from "@/lib/authHelper";
+import { getValidMercadoPagoAccessToken } from "@/lib/mp-oauth";
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Verificar autenticación del usuario que paga
     const authResult = await authenticateUser();
-    if (authResult instanceof Response) return authResult; // 401
-    const user = authResult; // El comprador
+    if (authResult instanceof Response) return authResult;
+    const user = authResult;
 
     const { orderId } = await req.json();
 
@@ -21,33 +20,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "orderId es requerido" }, { status: 400, headers: corsHeaders });
     }
 
-    // 2. Buscar la orden y verificar que pertenece al usuario
     const order = await db.order.findUnique({
-      where: { id: orderId, profile_id: user.id }, // Seguridad: debe ser su orden
-      include: {
-        products: { include: { product: true } },
-        profile: true, // Ya tenemos 'user' de authenticateUser, pero lo necesitamos para email MP
-        vendor: true,
-      },
+      where: { id: orderId, profile_id: user.id },
+      include: { products: { include: { product: true } }, profile: true, vendor: true },
     });
 
     if (!order) {
       return NextResponse.json({ error: "Orden no encontrada o no pertenece al usuario" }, { status: 404, headers: corsHeaders });
     }
 
-    // 3. Inicializar cliente con accessToken válido del vendedor (usando helper)
-    const accessToken = await getValidMercadoPagoAccessToken(order.vendor.id); // Usamos el helper para refrescar si es necesario
-
+    const accessToken = await getValidMercadoPagoAccessToken(order.vendor.id);
     const client = new MercadoPagoConfig({
       accessToken: accessToken,
       options: { timeout: 5000 },
     });
 
-    // 4. Preparar items de MP
     const items = order.products.map((item) => ({
       id: item.product.id.toString(),
       title: item.product.name,
-      // ... otros campos como description, quantity, price ...
       description: item.product.description || "",
       quantity: item.quantity,
       currency_id: "ARS",
@@ -56,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     // ... lógica de cálculo de comisión ...
     const total = items.reduce((acc, item) => acc + item.unit_price * item.quantity, 0);
-    const appCommission = Math.round(total * 0.1); // 10%
+    const appCommission = Math.round(total * 0.1);
 
     // 5. Crear preferencia de MP
     const preference = await new Preference(client).create({
@@ -71,14 +61,32 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 6. Guardar preferenceId en la orden y devolver respuesta consistente
+    // 6. Guardar preferenceId
     await db.order.update({
       where: { id: orderId },
       data: { preference_id: preference.id },
     });
 
+    // 7. AÑADIR LA URL DE PAGO A LA RESPUESTA
+    let mpUrl: string | undefined;
+    
+    // Si estás en producción, usa init_point, si estás en test, usa sandbox_init_point
+    if (process.env.NODE_ENV === 'production') {
+        mpUrl = preference.init_point;
+    } else {
+        mpUrl = preference.sandbox_init_point;
+    }
+    
+    if (!mpUrl) {
+       return NextResponse.json(
+            { error: "No se pudo generar el link de pago de Mercado Pago" }, 
+            { status: 500, headers: corsHeaders }
+        ); 
+    }
+
     return NextResponse.json(
-        { preference_id: preference.id, order },
+        // Devolvemos la URL que el frontend espera
+        { preference_id: preference.id, order, mp_url: mpUrl }, 
         { status: 200, headers: corsHeaders }
     );
     
