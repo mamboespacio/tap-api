@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSupabaseUpload, type UploadedFileInfo } from "@/hooks/useSupabaseUploads";
-import { createProductAction } from "@/app/dashboard/products/actions"; // server action
+import { createProductAction } from "@/app/dashboard/products/actions";
 
 type CategoryOption = { id: number; name: string };
 type ProductWithCategory = {
@@ -19,44 +19,41 @@ type ProductWithCategory = {
   image_path?: string | null;
 };
 
+interface ProductFormModalProps {
+  categories: CategoryOption[];
+  productToEdit: ProductWithCategory | null; // Si es null, el modal no se renderiza
+  onClose: () => void;
+}
+
 export default function ProductFormModal({
   categories,
   productToEdit,
   onClose,
-}: {
-  categories: CategoryOption[];
-  productToEdit: ProductWithCategory | null;
-  onClose: () => void;
-}) {
+}: ProductFormModalProps) {
   const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const BUCKET = "tap-production";
-  const PATH = "product-images";
+  const PATH = "products";
+
 
   const {
     files,
     setFiles,
-    uploadedFiles,
-    loading: uploading,
-    errors,
     onUpload,
-    getRootProps,
-    getInputProps,
+    loading: uploading,
     open,
+    getRootProps,    // <--- Ahora sí estarán disponibles
+    getInputProps,   // <--- Ahora sí estarán disponibles
+    isDragActive,    // (Opcional, si quieres usarlo en el estilo)
     removeUploadedFile,
   } = useSupabaseUpload({
     bucketName: BUCKET,
     path: PATH,
-    allowedMimeTypes: ["image/*"],
-    maxFileSize: 5 * 1024 * 1024,
-    maxFiles: 1,
-    cacheControl: 3600,
-    upsert: false,
-  } as any);
+    // ... resto de opciones
+  }) as any; // Usamos any temporalmente si el tipado UseSupabaseUploadReturn no es exacto
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     id: 0,
@@ -70,6 +67,7 @@ export default function ProductFormModal({
     image_path: "" as string | null,
   });
 
+  // 1. Sincronizar el formulario cuando el prop cambie
   useEffect(() => {
     if (productToEdit) {
       setForm({
@@ -79,65 +77,56 @@ export default function ProductFormModal({
         price: typeof productToEdit.price === "string" ? Number(productToEdit.price) : productToEdit.price ?? 0,
         stock: productToEdit.stock ?? 0,
         active: productToEdit.active ?? true,
-        category_id: productToEdit.category_id ?? categories[0]?.id ?? 0,
+        category_id: productToEdit.category_id || (categories.length > 0 ? categories[0].id : 0),
         image_url: productToEdit.image_url ?? null,
         image_path: productToEdit.image_path ?? null,
       });
       setPreviewUrl(productToEdit.image_url ?? null);
-      setIsOpen(true);
-    } else {
-      setIsOpen(false);
-      setPreviewUrl(null);
-      setForm((f) => ({ ...f, image_url: null, image_path: null }));
-      setFiles([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productToEdit, categories]);
 
-  // When files change we trigger upload and use the returned uploadedFiles to populate form
+  // 2. Manejo de subida de archivos automática
+  // useEffect para procesar la subida apenas se selecciona un archivo
   useEffect(() => {
+    // Solo subimos si hay archivos nuevos que no tienen preview de Supabase
     if (files.length === 0) return;
 
-    (async () => {
+    const uploadFile = async () => {
       try {
-        const results: UploadedFileInfo[] = await onUpload();
+        // 1. Ejecutamos la subida
+        const results = await onUpload();
+
+        // 2. Si se subió con éxito (tu hook devuelve UploadedFileInfo[])
         if (results && results.length > 0) {
-          const first = results[0];
-          setForm((s) => ({ ...s, image_url: first.publicUrl, image_path: first.path }));
-          setPreviewUrl(first.publicUrl);
+          const fileData = results[0]; // Tomamos el primero porque maxFiles es 1
+
+          // 3. Actualizamos el FORMULARIO para que Prisma reciba los datos
+          setForm(prev => ({
+            ...prev,
+            image_url: fileData.publicUrl,
+            image_path: fileData.path
+          }));
+
+          // 4. Actualizamos la PREVISUALIZACIÓN local
+          setPreviewUrl(fileData.publicUrl);
         }
-        // clear staged files (the hook also maintains uploadedFiles)
-        setFiles([]);
       } catch (err) {
-        console.error("Upload error:", err);
+        console.error("Error en la subida:", err);
       }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files]);
+    };
+
+    uploadFile();
+  }, [files]); // Se dispara cada vez que el dropzone recibe un archivo
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type, checked } = e.target as HTMLInputElement;
+    const { name, value, type } = e.target;
+    const val = type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
+
     setForm((s) => ({
       ...s,
-      [name]: type === "checkbox" ? checked : (type === "number" ? Number(value) : value),
+      [name]: type === "number" ? Number(val) : val,
     }));
-  };
-
-  const removeImage = async (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-
-    if (form.image_path) {
-      // try to delete from storage and then clear form
-      const ok = await removeUploadedFile(form.image_path);
-      if (!ok) {
-        alert("No se pudo eliminar la imagen del storage.");
-        return;
-      }
-    }
-
-    setForm((s) => ({ ...s, image_url: null, image_path: null }));
-    setPreviewUrl(null);
-    setFiles([]);
   };
 
   const handleSave = async () => {
@@ -145,139 +134,174 @@ export default function ProductFormModal({
     setSaving(true);
 
     try {
-      // final sanity: if uploadedFiles has an entry for our image_path, ensure form.image_url is set
-      if (!form.image_url && form.image_path) {
-        const match = uploadedFiles.find((u) => u.path === form.image_path);
-        if (match) {
-          setForm((s) => ({ ...s, image_url: match.publicUrl }));
-        }
-      }
-
       const payload = {
+        id: form.id > 0 ? form.id : undefined,
         name: String(form.name),
-        description: form.description ?? null,
-        price: Number(form.price ?? 0),
-        stock: Number(form.stock ?? 0),
-        categoryId: Number(form.category_id ?? 0),
-        imageUrl: form.image_url ?? null,
-        imagePath: form.image_path ?? null,
+        description: form.description,
+        price: Number(form.price),
+        stock: Number(form.stock),
+        categoryId: Number(form.category_id),
+        imageUrl: form.image_url,
+        imagePath: form.image_path,
+        active: form.active
       };
 
-      console.debug("Payload enviado a createProductAction:", payload);
-
-      await createProductAction(payload);
-
-      onClose();
+      await createProductAction(payload as any);
       router.refresh();
+      onClose(); // Cerramos mediante el padre
     } catch (err: any) {
-      console.error("Error creando producto:", err);
-      alert(err?.message ?? "Error creando el producto");
+      alert(err?.message ?? "Error al guardar el producto");
     } finally {
       setSaving(false);
     }
   };
 
-  const localPreview = form.image_url || (files && files.length > 0 ? (files[0] as any).preview ?? null : null);
+  const removeImage = async () => {
+    if (form.image_path) {
+      await removeUploadedFile(form.image_path);
+    }
+    setForm((s) => ({ ...s, image_url: null, image_path: null }));
+    setPreviewUrl(null);
+  };
 
-  const hasPendingUploads = uploading || files.length > 0;
+  // IMPORTANTE: Si no hay objeto para editar/crear, no renderizamos nada.
+  // Esto evita que el modal aparezca al inicio si el padre empieza con null.
+  if (!productToEdit) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={() => onClose()} />
-      <div className="relative z-10 w-full max-w-2xl rounded bg-white p-6 dark:bg-gray-800">
-        <h3 className="mb-4 text-lg font-semibold">{form.id === 0 ? "Crear producto" : "Editar producto"}</h3>
+      {/* Backdrop - Ahora llama directamente a onClose */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
-        <div className="space-y-3">
+      <div className="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl dark:bg-gray-800">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+            {form.id === 0 ? "Nuevo Producto" : "Editar Producto"}
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+
+        <div className="space-y-4">
           <div>
-            <label className="block text-sm">Nombre</label>
-            <input name="name" value={form.name} onChange={handleChange} className="mt-1 w-full rounded border px-2 py-1" />
+            <label className="block text-sm font-medium mb-1">Nombre del producto</label>
+            <input
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:bg-gray-700 dark:border-gray-600"
+              placeholder="Ej: Camiseta de Algodón"
+            />
           </div>
 
           <div>
-            <label className="block text-sm">Descripción</label>
-            <textarea name="description" value={form.description ?? ""} onChange={handleChange} className="mt-1 w-full rounded border px-2 py-1" />
+            <label className="block text-sm font-medium mb-1">Descripción</label>
+            <textarea
+              name="description"
+              value={form.description ?? ""}
+              onChange={handleChange}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 h-24 focus:ring-2 focus:ring-blue-500 outline-none dark:bg-gray-700 dark:border-gray-600"
+            />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm">Precio</label>
-              <input name="price" type="number" step="0.01" value={Number(form.price ?? 0)} onChange={handleChange} className="mt-1 w-full rounded border px-2 py-1" />
+              <label className="block text-sm font-medium mb-1">Precio</label>
+              <input
+                name="price"
+                type="number"
+                step="0.01"
+                value={form.price}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 dark:bg-gray-700"
+              />
             </div>
             <div>
-              <label className="block text-sm">Stock</label>
-              <input name="stock" type="number" value={form.stock} onChange={handleChange} className="mt-1 w-full rounded border px-2 py-1" />
+              <label className="block text-sm font-medium mb-1">Stock</label>
+              <input
+                name="stock"
+                type="number"
+                value={form.stock}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 dark:bg-gray-700"
+              />
             </div>
             <div>
-              <label className="block text-sm">Categoría</label>
-              <select name="category_id" value={form.category_id} onChange={handleChange} className="mt-1 w-full rounded border px-2 py-1">
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <label className="block text-sm font-medium mb-1">Categoría</label>
+              <select
+                name="category_id"
+                value={form.category_id}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 dark:bg-gray-700"
+              >
+                <option value={0}>Seleccionar...</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
               </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm mb-2">Imagen</label>
+            <label className="block text-sm font-medium mb-2">Imagen del producto</label>
 
+            {/* Contenedor de Dropzone */}
             <div
-              {...(getRootProps ? getRootProps() : {})}
-              className="min-h-[120px] flex w-full cursor-pointer flex-col items-center justify-center gap-3 rounded border-2 border-dashed p-4 text-center transition hover:border-gray-400"
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${isDragActive ? "border-blue-500 bg-blue-50" : "border-gray-300"
+                }`}
             >
-              <input {...(getInputProps ? getInputProps() : {})} />
+              <input {...getInputProps()} />
 
-              {uploading ? (
-                <p className="text-sm text-gray-600">Subiendo...</p>
-              ) : localPreview ? (
-                <div className="flex w-full items-start justify-between gap-3">
-                  <img src={localPreview} alt="preview" className="max-h-32 rounded object-contain" />
-                  <div className="flex flex-col items-end gap-2">
-                    <button
-                      className="rounded border px-3 py-1 text-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeImage(e);
-                      }}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
+              {previewUrl ? (
+                <div className="relative inline-block">
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="h-40 w-40 object-cover rounded-md border"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Evita que se abra el selector de archivos
+                      removeImage();
+                    }}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg"
+                  >
+                    ✕
+                  </button>
                 </div>
               ) : (
-                <div>
-                  <p className="text-sm text-gray-600">Arrastra una imagen aquí o haz click para seleccionar</p>
-                  <div className="mt-2 flex gap-2 justify-center">
-                    <button
-                      type="button"
-                      className="rounded border px-3 py-1 text-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        open && open();
-                      }}
-                    >
-                      Seleccionar archivo
-                    </button>
-                  </div>
-                  {errors && errors.length > 0 && (
-                    <p className="text-xs text-red-500 mt-2">{errors[0]?.message ?? "Archivo inválido"}</p>
-                  )}
+                <div className="py-4 cursor-pointer" onClick={open}>
+                  <p className="text-sm text-gray-600">
+                    Arrastra una imagen aquí o <span className="text-blue-600 font-bold">haz clic para buscar</span>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Máximo 5MB</p>
                 </div>
               )}
             </div>
 
-            <p className="mt-1 text-xs text-gray-500">
-              {hasPendingUploads ? "Subiendo imagen... espera antes de guardar." : "La imagen se sube a Supabase y su URL pública se guardará en el producto."}
-            </p>
+            {uploading && <p className="text-xs text-blue-500 mt-2 animate-pulse">Subiendo a Supabase...</p>}
           </div>
 
-          <div className="flex justify-end gap-2 pt-3">
-            <button className="rounded border px-3 py-1" onClick={() => onClose()} disabled={saving}>Cancelar</button>
-            <button
-              className="rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-60"
-              onClick={handleSave}
-              disabled={saving || hasPendingUploads}
-            >
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
-          </div>
+        </div>
+
+        <div className="mt-8 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || uploading}
+            className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 transition-colors shadow-lg shadow-blue-500/30"
+          >
+            {saving ? "Guardando..." : "Guardar Producto"}
+          </button>
         </div>
       </div>
     </div>

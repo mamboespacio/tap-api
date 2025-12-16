@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ProductFormModal from "@/components/products/ProductsFormModal"; // Reutilizamos el modal
 import { useState, useCallback } from "react";
 import { Plus } from "lucide-react";
+import Link from "next/link";
 
 // Definimos los tipos basados en la consulta de Prisma
 export type ProductWithCategory = { // Exportamos el tipo para usarlo en el modal
@@ -33,6 +34,16 @@ export default function ProductsList({ products, categories }: { products: Produ
   // Memorizar callbacks para evitar pasar funciones nuevas cada render
   const handleClose = useCallback(() => setEditingProduct(null), []);
   const handleEdit = useCallback((product: ProductWithCategory) => setEditingProduct(product), []);
+  const handleCreate = useCallback(() => setEditingProduct({
+    id: 0,
+    name: '',
+    description: '',
+    price: 0,
+    stock: 0,
+    active: true,
+    category_id: categories[0]?.id || 0,
+    category: { name: '' },
+  }), [categories]);
 
   const handleDelete = useCallback(async (productId: number) => {
     if (confirm("¿Estás seguro de que quieres eliminar este producto?")) {
@@ -55,16 +66,7 @@ export default function ProductsList({ products, categories }: { products: Produ
       />
 
       <button
-        onClick={() => setEditingProduct({ // Abrir modal en modo "nuevo"
-          id: 0,
-          name: '',
-          description: '',
-          price: 0,
-          stock: 0,
-          active: true,
-          category_id: categories[0]?.id || 0,
-          category: { name: '' },
-        })}
+        onClick={() => handleCreate()} //
         className="absolute bottom-4 right-4 p-4 bg-blue-600 text-white rounded-full hover:bg-blue-700"
       >
         <Plus className="w-5 h-5" />

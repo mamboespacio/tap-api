@@ -54,7 +54,11 @@ export async function GET(req: Request) {
       .update(JSON.stringify(stateData))
       .digest();
 
-    const state = b64url(Buffer.from(JSON.stringify({ ...stateData, s: b64url(sig) })));
+    const state = b64url(Buffer.from(JSON.stringify({ 
+      v: vendorId, 
+      t: stateData.t, 
+      s: sig.toString('hex').substring(0, 16) // Firma truncada para ahorrar espacio
+    })));
 
     // 4️⃣ Construir URL de autorización
     const authUrl = new URL("https://auth.mercadopago.com.ar/authorization");

@@ -1,19 +1,21 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { OrderStatus, PrismaClient, Role } from "@prisma/client";
+import { PrismaClient, Role } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 
 const prisma = new PrismaClient();
 
 type ProductData = {
+  id: number;
   name: string;
   description?: string | null;
   price: number;
   stock: number;
   categoryId: number;
   imageUrl?: string | null;
+  active?: boolean;
 };
-
 export async function createProductAction(data: ProductData) {
   const supabase = await createClient();
   const {
@@ -39,19 +41,41 @@ export async function createProductAction(data: ProductData) {
       ? Math.round(data.price * 100) / 100
       : parseFloat(Number(data.price ?? 0).toFixed(2));
 
-  await prisma.product.create({
-    data: {
-      name: data.name,
-      description: data.description ?? null,
-      price,
-      stock: data.stock,
-      category_id: data.categoryId,
-      image_url: data.imageUrl ?? null,
-      vendor_id: vendorId,
-    },
-  });
+  const productId = Number(data.id);
 
-  return { success: true };
+  try {
+    const product = await prisma.product.upsert({
+      where: {
+        // Si el id es 0 o menor, usamos un valor que no exista para disparar el 'create'
+        id: productId > 0 ? productId : -1,
+      },
+      update: {
+        name: data.name,
+        description: data.description,
+        price: price,
+        stock: data.stock,
+        category_id: data.categoryId,
+        image_url: data.imageUrl,
+        active: data.active,
+      },
+      create: {
+        name: data.name,
+        description: data.description,
+        price: price,
+        stock: data.stock,
+        category_id: data.categoryId,
+        image_url: data.imageUrl,
+        active: data.active ?? true,
+        vendor_id: vendorId,
+      },
+    });
+
+    revalidatePath("/dashboard/products");
+    return product;
+  } catch (error) {
+    console.error("Error en Prisma Action:", error);
+    throw new Error("No se pudo procesar la operación");
+  }
 }
 
 export async function deleteProductAction(productId: number) {
