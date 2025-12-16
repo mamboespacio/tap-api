@@ -138,6 +138,7 @@ model OrderProduct {
   quantity   Int
   order      Order   @relation(fields: [order_id], references: [id])
   product    Product @relation(fields: [product_id], references: [id])
+  price      Float
 
   @@index([order_id])
   @@index([product_id])
