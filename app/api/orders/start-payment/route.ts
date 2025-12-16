@@ -1,4 +1,4 @@
-// app/api/orders/start-payment/route.ts (CORREGIDO)
+// app/api/orders/start-payment/route.ts (CORREGIDO Y FINAL)
 
 export const runtime = 'nodejs';
 
@@ -10,7 +10,7 @@ import { getValidMercadoPagoAccessToken } from "@/lib/mp-oauth";
 
 export async function POST(req: NextRequest) {
   try {
-    const authResult = await authenticateUser();
+    const authResult = await authenticateUser(req);
     if (authResult instanceof Response) return authResult;
     const user = authResult;
 
@@ -26,14 +26,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!order) {
-      return NextResponse.json({ error: "Orden no encontrada o no pertenece al usuario" }, { status: 404, headers: corsHeaders });
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404, headers: corsHeaders });
     }
 
     const accessToken = await getValidMercadoPagoAccessToken(order.vendor.id);
-    const client = new MercadoPagoConfig({
-      accessToken: accessToken,
-      options: { timeout: 5000 },
-    });
+    const client = new MercadoPagoConfig({ accessToken, options: { timeout: 5000 } });
 
     const items = order.products.map((item) => ({
       id: item.product.id.toString(),
@@ -44,16 +41,22 @@ export async function POST(req: NextRequest) {
       unit_price: Number(item.product.price),
     }));
 
-    // ... lógica de cálculo de comisión ...
     const total = items.reduce((acc, item) => acc + item.unit_price * item.quantity, 0);
     const appCommission = Math.round(total * 0.1);
 
-    // 5. Crear preferencia de MP
+    // Definir la URL base de tu App/Web
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://tu-sitio.com";
+
     const preference = await new Preference(client).create({
       body: {
         items,
         payer: { email: order.profile.email ?? undefined },
-        back_urls: { /* ... urls de retorno ... */ },
+        // SOLUCIÓN AL ERROR: back_urls obligatorias para auto_return
+        back_urls: {
+          success: `${baseUrl}/payment/success`,
+          failure: `${baseUrl}/payment/failure`,
+          pending: `${baseUrl}/payment/pending`,
+        },
         auto_return: "approved",
         external_reference: orderId.toString(),
         marketplace: "Tap",
@@ -61,40 +64,36 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 6. Guardar preferenceId
     await db.order.update({
       where: { id: orderId },
       data: { preference_id: preference.id },
     });
 
-    // 7. AÑADIR LA URL DE PAGO A LA RESPUESTA
-    let mpUrl: string | undefined;
-    
-    // Si estás en producción, usa init_point, si estás en test, usa sandbox_init_point
-    if (process.env.NODE_ENV === 'production') {
-        mpUrl = preference.init_point;
-    } else {
-        mpUrl = preference.sandbox_init_point;
-    }
-    
-    if (!mpUrl) {
-       return NextResponse.json(
-            { error: "No se pudo generar el link de pago de Mercado Pago" }, 
-            { status: 500, headers: corsHeaders }
-        ); 
-    }
+    // DETERMINAR LA URL DE PAGO (Vital para tu App Expo)
+    const mpUrl = process.env.NODE_ENV === 'production' 
+      ? preference.init_point 
+      : preference.sandbox_init_point;
 
+    // DEVOLVER LA URL AL FRONTEND
     return NextResponse.json(
-        // Devolvemos la URL que el frontend espera
-        { preference_id: preference.id, order, mp_url: mpUrl }, 
+        { 
+          preference_id: preference.id, 
+          mp_url: mpUrl, // <-- Esto es lo que soluciona tu error en CartPage.tsx
+          order 
+        },
         { status: 200, headers: corsHeaders }
     );
     
   } catch (error: any) {
     console.error("Error en start-payment:", error);
     return NextResponse.json(
-        { error: "Error interno del servidor" },
+        { error: "Error al generar el pago" },
         { status: 500, headers: corsHeaders }
     );
   }
+}
+
+// Manejo de pre-flight CORS
+export async function OPTIONS() {
+  return new NextResponse(null, { headers: corsHeaders });
 }
