@@ -89,7 +89,7 @@ model Category {
 
 model Product {
   id          Int            @id @default(autoincrement())
-  name        String         @unique
+  name        String
   description String?
   price       Float
   stock       Int            @default(0)
@@ -102,7 +102,7 @@ model Product {
   category    Category       @relation(fields: [category_id], references: [id])
   vendor      Vendor         @relation(fields: [vendor_id], references: [id])
 
-  @@index([vendor_id])
+  @@unique([vendor_id, name])
   @@index([category_id])
   @@map("products")
 }

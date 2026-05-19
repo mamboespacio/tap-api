@@ -1,6 +1,6 @@
 "use client";
 
-import { deleteProductAction } from "@/app/actions";
+import { deleteProductAction } from "@/app/dashboard/products/actions";
 import { useRouter } from "next/navigation";
 import ProductFormModal from "@/components/products/ProductsFormModal"; // Reutilizamos el modal
 import { useState, useCallback } from "react";

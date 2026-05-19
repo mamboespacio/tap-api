@@ -9,7 +9,7 @@ export function useSupabaseUser() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
    // Escuchar cambios de sesión
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
