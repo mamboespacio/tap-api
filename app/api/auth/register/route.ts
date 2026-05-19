@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
 import { corsHeaders } from "@/lib/authHelper";
+import { rateLimit } from "@/lib/ratelimit";
 import db from "@/lib/prisma";
 
 const RegisterSchema = z.object({
@@ -18,6 +19,23 @@ const RegisterSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  const ip =
+    (req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()) ?? "anonymous";
+  const { allowed, retryAfterMs } = rateLimit(`auth:register:${ip}`, 5, 60_000);
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Demasiados intentos de registro. Intentá de nuevo en un momento." },
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          "Retry-After": String(Math.ceil(retryAfterMs / 1000)),
+        },
+      },
+    );
+  }
+
   try {
     const body = await req.json();
     const parsed = RegisterSchema.safeParse(body);
@@ -25,7 +43,7 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Datos de registro inválidos", details: parsed.error.issues },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: corsHeaders },
       );
     }
 
@@ -33,11 +51,7 @@ export async function POST(req: Request) {
       parsed.data;
 
     const supabase = await createSupabaseClient();
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
       console.error("Error al registrar en Supabase:", error.message);
@@ -49,15 +63,8 @@ export async function POST(req: Request) {
     if (user) {
       await db.profile.upsert({
         where: { id: user.id },
-        update: {
-          email: user.email ?? email,
-          full_name: fullName ?? undefined,
-        },
-        create: {
-          id: user.id,
-          email: user.email ?? email,
-          full_name: fullName ?? null,
-        },
+        update: { email: user.email ?? email, full_name: fullName ?? undefined },
+        create: { id: user.id, email: user.email ?? email, full_name: fullName ?? null },
       });
 
       if (vendorName) {
@@ -73,7 +80,10 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ user: data.user ?? null, session: data.session ?? null }, { status: 200, headers: corsHeaders });
+    return NextResponse.json(
+      { user: data.user ?? null, session: data.session ?? null },
+      { status: 200, headers: corsHeaders },
+    );
   } catch (err: any) {
     console.error("register POST error:", err);
     return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500, headers: corsHeaders });

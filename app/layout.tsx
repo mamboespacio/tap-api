@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Providers } from "./providers"; // ya adaptado a Supabase
+import { Providers } from "./providers";
 import "./globals.css";
+import "@/lib/config"; // validates all required env vars at startup — throws on missing
 
 export const metadata: Metadata = {
   title: "TAP - Comercios",

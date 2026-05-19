@@ -44,8 +44,7 @@ export async function POST(req: NextRequest) {
     const total = items.reduce((acc, item) => acc + item.unit_price * item.quantity, 0);
     const appCommission = Math.round(total * 0.1);
 
-    // Definir la URL base de tu App/Web
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://tu-sitio.com";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
     const preference = await new Preference(client).create({
       body: {
