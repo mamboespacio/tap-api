@@ -17,6 +17,7 @@ type ProductData = {
   imageUrl?: string | null;
   active?: boolean;
 };
+
 export async function createProductAction(data: ProductData) {
   const supabase = await createClient();
   const {
@@ -36,7 +37,6 @@ export async function createProductAction(data: ProductData) {
 
   const vendorId = vendorProfile.vendors_owned[0].id;
 
-  // Aseguramos precio a 2 decimales
   const price =
     typeof data.price === "number"
       ? Math.round(data.price * 100) / 100
@@ -45,37 +45,48 @@ export async function createProductAction(data: ProductData) {
   const productId = Number(data.id);
 
   try {
-    const product = await prisma.product.upsert({
-      where: {
-        // Si el id es 0 o menor, usamos un valor que no exista para disparar el 'create'
-        id: productId > 0 ? productId : -1,
-      },
-      update: {
-        name: data.name,
-        description: data.description,
-        price: price,
-        stock: data.stock,
-        category_id: data.categoryId,
-        image_url: data.imageUrl,
-        active: data.active,
-      },
-      create: {
-        name: data.name,
-        description: data.description,
-        price: price,
-        stock: data.stock,
-        category_id: data.categoryId,
-        image_url: data.imageUrl,
-        active: data.active ?? true,
-        vendor_id: vendorId,
-      },
-    });
+    let product;
+
+    if (productId > 0) {
+      // Update path: verify ownership before touching the row
+      const existing = await prisma.product.findFirst({
+        where: { id: productId, vendor_id: vendorId },
+      });
+      if (!existing) throw new Error("Producto no encontrado o sin permiso.");
+
+      product = await prisma.product.update({
+        where: { id: productId },
+        data: {
+          name: data.name,
+          description: data.description,
+          price,
+          stock: data.stock,
+          category_id: data.categoryId,
+          image_url: data.imageUrl,
+          active: data.active,
+        },
+      });
+    } else {
+      // Create path
+      product = await prisma.product.create({
+        data: {
+          name: data.name,
+          description: data.description,
+          price,
+          stock: data.stock,
+          category_id: data.categoryId,
+          image_url: data.imageUrl,
+          active: data.active ?? true,
+          vendor_id: vendorId,
+        },
+      });
+    }
 
     revalidatePath("/dashboard/products");
     return product;
   } catch (error) {
     console.error("Error en Prisma Action:", error);
-    throw new Error("No se pudo procesar la operación");
+    throw error instanceof Error ? error : new Error("No se pudo procesar la operación");
   }
 }
 
@@ -96,12 +107,9 @@ export async function deleteProductAction(productId: number) {
 
   if (!isOwner) throw new Error("No tienes permiso para eliminar este producto.");
 
-  // Si quieres borrar la imagen asociada en Supabase, hazlo aquí antes de borrar el producto.
-  // Ejemplo (si guardaste la ruta en DB, no solo la URL pública):
-  // if (product.image_path) { await supabase.storage.from('product-images').remove([product.image_path]); }
-
   await prisma.product.delete({ where: { id: productId } });
 
+  revalidatePath("/dashboard/products");
   return { success: true };
 }
 
@@ -136,7 +144,6 @@ export async function updateProductAction(data: UpdateProductData) {
 
   if (!isOwner) throw new Error("No tienes permiso para editar este producto.");
 
-  // Construimos updateData sólo con campos presentes
   const updateData: any = {};
 
   if (data.name !== undefined) updateData.name = data.name;
@@ -147,7 +154,6 @@ export async function updateProductAction(data: UpdateProductData) {
   if (data.categoryId !== undefined) updateData.category_id = data.categoryId;
   if (data.imageUrl !== undefined) updateData.image_url = data.imageUrl;
 
-  // Si updateData queda vacío podríamos optar por devolver un error o simplemente no hacer nada.
   if (Object.keys(updateData).length === 0) {
     return { success: true, message: "No hay cambios para aplicar." };
   }
@@ -157,5 +163,6 @@ export async function updateProductAction(data: UpdateProductData) {
     data: updateData,
   });
 
+  revalidatePath("/dashboard/products");
   return { success: true };
 }

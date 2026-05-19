@@ -1,5 +1,6 @@
 export const runtime = 'nodejs';
 
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/prisma";
 import { corsHeaders } from "@/lib/authHelper";
@@ -16,6 +17,26 @@ import { getValidMercadoPagoAccessToken } from "@/lib/mp-oauth";
  *
  * Nota: se recomienda implementar verificación de firma (HMAC) si lo habilitas desde MP.
  */
+
+function verifyMPSignature(
+  secret: string,
+  xSignature: string,
+  xRequestId: string,
+  dataId: string
+): boolean {
+  const tsPart = xSignature.split(",").find((p) => p.startsWith("ts="));
+  const v1Part = xSignature.split(",").find((p) => p.startsWith("v1="));
+  if (!tsPart || !v1Part) return false;
+  const ts = tsPart.slice(3);
+  const v1 = v1Part.slice(3);
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts}`;
+  const expected = crypto.createHmac("sha256", secret).update(manifest).digest("hex");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
 
 async function fetchPaymentFromMP(paymentId: string, token: string) {
   const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
@@ -37,6 +58,17 @@ async function fetchPaymentFromMP(paymentId: string, token: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const xSignature = req.headers.get("x-signature") ?? "";
+      const xRequestId = req.headers.get("x-request-id") ?? "";
+      const dataId = new URL(req.url).searchParams.get("data.id") ?? "";
+      if (!verifyMPSignature(webhookSecret, xSignature, xRequestId, dataId)) {
+        console.warn("Webhook MP: firma inválida");
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
     const rawBody = await req.text().catch(() => "");
     let body: any = {};
     try {
@@ -166,7 +198,7 @@ export async function POST(req: NextRequest) {
 
     const order = await db.order.findUnique({
       where: { id: orderId },
-      include: { vendor: true, profile: true },
+      include: { vendor: true, profile: true, products: true },
     });
 
     if (!order) {
@@ -199,19 +231,38 @@ export async function POST(req: NextRequest) {
         newStatus = order.status;
     }
 
-    // Actualizar la orden con la info del pago
-    await db.order.update({
-      where: { id: orderId },
-      data: {
-        status: newStatus,
-        // payment_status: payment.status ?? null,
-        // payment_status_detail: payment.status_detail ?? null,
-        payment_id: payment.id?.toString?.() ?? String(candidatePaymentId ?? ""),
-        preference_id: payment.preference_id ?? order.preference_id,
-        // Guarda el raw para debugging (ajusta el campo según tu esquema; aquí suponemos mp_raw tipo JSON)
-        // mp_raw: payment as any,
-      },
-    });
+    const shouldRestoreStock =
+      (newStatus === "CANCELLED" || newStatus === "REJECTED") &&
+      order.status !== "CANCELLED" &&
+      order.status !== "REJECTED";
+
+    if (shouldRestoreStock) {
+      await db.$transaction(async (tx) => {
+        for (const item of order.products) {
+          await tx.product.update({
+            where: { id: item.product_id },
+            data: { stock: { increment: item.quantity } },
+          });
+        }
+        await tx.order.update({
+          where: { id: orderId },
+          data: {
+            status: newStatus,
+            payment_id: payment.id?.toString?.() ?? String(candidatePaymentId ?? ""),
+            preference_id: payment.preference_id ?? order.preference_id,
+          },
+        });
+      });
+    } else {
+      await db.order.update({
+        where: { id: orderId },
+        data: {
+          status: newStatus,
+          payment_id: payment.id?.toString?.() ?? String(candidatePaymentId ?? ""),
+          preference_id: payment.preference_id ?? order.preference_id,
+        },
+      });
+    }
 
     // Opcional: si quieres notificar por email/WS al cliente, puedes disparar jobs aquí
     console.info("Webhook MP procesado OK", { orderId, mpStatus, usedTokenForFetch });

@@ -1,12 +1,13 @@
-// app/api/orders/start-payment/route.ts (CORREGIDO Y FINAL)
-
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import db from "@/lib/prisma";
 import { MercadoPagoConfig, Preference } from "mercadopago";
 import { authenticateUser, corsHeaders } from "@/lib/authHelper";
 import { getValidMercadoPagoAccessToken } from "@/lib/mp-oauth";
+
+const StartPaymentSchema = z.object({ orderId: z.number().int().positive() });
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,11 +15,11 @@ export async function POST(req: NextRequest) {
     if (authResult instanceof Response) return authResult;
     const user = authResult;
 
-    const { orderId } = await req.json();
-
-    if (!orderId) {
-      return NextResponse.json({ error: "orderId es requerido" }, { status: 400, headers: corsHeaders });
+    const parseResult = StartPaymentSchema.safeParse(await req.json());
+    if (!parseResult.success) {
+      return NextResponse.json({ error: "orderId inválido" }, { status: 400, headers: corsHeaders });
     }
+    const { orderId } = parseResult.data;
 
     const order = await db.order.findUnique({
       where: { id: orderId, profile_id: user.id },

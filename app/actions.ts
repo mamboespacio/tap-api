@@ -40,6 +40,12 @@ export async function createOrderAction(data: any) {
   };
 }
 
+// Transitions allowed from the vendor dashboard. REJECTED and CANCELLED are terminal.
+const VALID_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
+  [OrderStatus.PENDING]: [OrderStatus.APPROVED, OrderStatus.CANCELLED],
+  [OrderStatus.APPROVED]: [OrderStatus.CANCELLED],
+};
+
 interface UpdateOrderStatusData {
   orderId: number;
   status: OrderStatus;
@@ -51,7 +57,10 @@ export async function updateOrderStatusAction(data: UpdateOrderStatusData) {
 
   if (!user) throw new Error("No autenticado.");
 
-  const order = await db.order.findUnique({ where: { id: data.orderId } });
+  const order = await db.order.findUnique({
+    where: { id: data.orderId },
+    include: { products: true },
+  });
   if (!order) throw new Error("Orden no encontrada.");
 
   const isOwner = await db.vendor.findFirst({
@@ -59,10 +68,27 @@ export async function updateOrderStatusAction(data: UpdateOrderStatusData) {
   });
   if (!isOwner) throw new Error("No tienes permiso para editar esta orden.");
 
-  await db.order.update({
-    where: { id: data.orderId },
-    data: { status: data.status },
-  });
+  const validNextStates = VALID_TRANSITIONS[order.status];
+  if (!validNextStates || !validNextStates.includes(data.status)) {
+    throw new Error(`Transición inválida: ${order.status} → ${data.status}`);
+  }
+
+  if (data.status === OrderStatus.CANCELLED) {
+    await db.$transaction(async (tx) => {
+      for (const item of order.products) {
+        await tx.product.update({
+          where: { id: item.product_id },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+      await tx.order.update({ where: { id: data.orderId }, data: { status: data.status } });
+    });
+  } else {
+    await db.order.update({
+      where: { id: data.orderId },
+      data: { status: data.status },
+    });
+  }
 
   return { success: true, message: `Orden ${data.orderId} actualizada a ${data.status}` };
 }
