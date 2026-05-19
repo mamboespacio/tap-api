@@ -3,8 +3,10 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { corsHeaders } from "@/lib/authHelper";
 import { rateLimit } from "@/lib/ratelimit";
+import { Role } from "@prisma/client";
 import db from "@/lib/prisma";
 
 const RegisterSchema = z.object({
@@ -61,22 +63,47 @@ export async function POST(req: Request) {
     const user = data.user;
 
     if (user) {
-      await db.profile.upsert({
-        where: { id: user.id },
-        update: { email: user.email ?? email, full_name: fullName ?? undefined },
-        create: { id: user.id, email: user.email ?? email, full_name: fullName ?? null },
-      });
-
-      if (vendorName) {
-        await db.vendor.create({
-          data: {
-            owner_id: user.id,
-            name: vendorName,
-            address: vendorAddress ?? "Av. Siempre Viva 742",
-            opening_hours: openingHours ? new Date(openingHours) : undefined,
-            closing_hours: closingHours ? new Date(closingHours) : undefined,
+      try {
+        await db.profile.upsert({
+          where: { id: user.id },
+          update: {
+            email: user.email ?? email,
+            full_name: fullName ?? undefined,
+            ...(vendorName ? { role: Role.VENDOR } : {}),
+          },
+          create: {
+            id: user.id,
+            email: user.email ?? email,
+            full_name: fullName ?? null,
+            role: vendorName ? Role.VENDOR : Role.CUSTOMER,
           },
         });
+
+        if (vendorName) {
+          await db.vendor.create({
+            data: {
+              owner_id: user.id,
+              name: vendorName,
+              address: vendorAddress ?? "Av. Siempre Viva 742",
+              opening_hours: openingHours ? new Date(openingHours) : undefined,
+              closing_hours: closingHours ? new Date(closingHours) : undefined,
+            },
+          });
+        }
+      } catch (dbError: any) {
+        // Rollback: clean up profile and auth user so the email is reusable
+        await db.profile.delete({ where: { id: user.id } }).catch(() => {});
+        try {
+          const admin = createAdminClient();
+          await admin.auth.admin.deleteUser(user.id);
+        } catch (adminErr) {
+          console.error("No se pudo limpiar el usuario auth tras fallo de registro:", adminErr);
+        }
+        console.error("register DB error:", dbError);
+        return NextResponse.json(
+          { error: "Error al crear el perfil. Intente de nuevo." },
+          { status: 500, headers: corsHeaders },
+        );
       }
     }
 

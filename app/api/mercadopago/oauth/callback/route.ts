@@ -60,11 +60,9 @@ export async function GET(req: Request) {
 
     // 2️⃣ Validar sesión y propietario (usando Supabase)
     const supabase = await createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (!session?.user?.id) {
+    if (!user?.id) {
       return new Response(null, {
         status: 302,
         headers: {
@@ -79,7 +77,7 @@ export async function GET(req: Request) {
       where: { id: Number(vendorId) },
     });
 
-    if (!vendor || vendor.owner_id !== session.user.id) {
+    if (!vendor || vendor.owner_id !== user.id) {
       return new Response(
         JSON.stringify({ error: "Vendor no pertenece al usuario" }),
         {

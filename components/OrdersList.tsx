@@ -6,6 +6,16 @@ import { useRouter } from "next/navigation";
 import { OrderStatus } from "@prisma/client";
 import Link from "next/link";
 
+const VALID_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
+  [OrderStatus.PENDING]: [OrderStatus.APPROVED, OrderStatus.CANCELLED],
+  [OrderStatus.APPROVED]: [OrderStatus.CANCELLED],
+};
+
+function availableStatuses(current: OrderStatus): OrderStatus[] {
+  const next = VALID_TRANSITIONS[current] ?? [];
+  return [current, ...next];
+}
+
 type OrderWithDetails = {
   id: number;
   price: number;
@@ -77,13 +87,13 @@ export default function OrderList({ orders, currentPage, totalCount, pageSize }:
                   <select
                     value={order.status}
                     onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
-                    disabled={loadingOrderId === order.id}
+                    disabled={loadingOrderId === order.id || availableStatuses(order.status).length === 1}
                     className={`p-2 rounded text-sm ${
                       order.status === 'APPROVED' ? 'bg-green-100' :
                       order.status === 'PENDING' ? 'bg-yellow-100' : 'bg-red-100'
                     }`}
                   >
-                    {Object.values(OrderStatus).map((s) => (
+                    {availableStatuses(order.status).map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>

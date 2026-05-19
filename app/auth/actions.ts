@@ -1,5 +1,6 @@
 "use server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Role } from "@prisma/client";
 import db from "@/lib/prisma";
 
@@ -32,7 +33,14 @@ async function createVendorProfile(userId: string, data: VendorRegistrationData)
       },
     });
   } catch (error) {
-    await db.profile.delete({ where: { id: userId } });
+    // Rollback: delete profile row and auth user so the email can be reused
+    await db.profile.delete({ where: { id: userId } }).catch(() => {});
+    try {
+      const admin = createAdminClient();
+      await admin.auth.admin.deleteUser(userId);
+    } catch (adminErr) {
+      console.error("No se pudo limpiar el usuario auth tras fallo de registro:", adminErr);
+    }
     console.error("Error en createVendorProfile:", error);
     throw error;
   }
