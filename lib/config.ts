@@ -12,6 +12,7 @@ const envSchema = z.object({
   OAUTH_STATE_SECRET: z.string().min(32, "OAUTH_STATE_SECRET must be at least 32 characters"),
   MP_REDIRECT_URI: z.string().url("MP_REDIRECT_URI must be a valid URL"),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
 });
 
 function validateEnv() {

@@ -136,22 +136,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Si aún no tenemos payment: intentar observar si el payload incluye suficiente info para buscar por preference_id
+    // No payment obtained and no candidatePaymentId to retry with — return 200 to stop MP retries
     if (!payment && candidateExternalReference) {
-      // No pudimos llamar MP; igual intentaremos actualizar la orden según el candidateExternalReference
-      // (No ideal: no tenemos el estado real desde MP) -> solo registrar evento
-      const orderIdNum = Number(candidateExternalReference);
-      // if (!Number.isNaN(orderIdNum)) {
-      //   await db.webhookLog?.create?.({
-      //     // si tienes tabla de logs; si no, omitir o usa db.$executeRaw para guardar a tu gusto
-      //     data: {
-      //       order_id: orderIdNum,
-      //       raw: rawBody || body,
-      //       note: "Recibido webhook MP pero no se pudo obtener payment (sin token disponible)",
-      //     } as any,
-      //   }).catch(() => {}); // no bloquear por falta de tabla
-      // }
-      // Responder 200 para evitar reintentos continuos
       return NextResponse.json({ ok: true }, { status: 200, headers: corsHeaders });
     }
 

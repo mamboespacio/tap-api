@@ -2,7 +2,6 @@ import * as React from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Menu } from "lucide-react";
-import { User } from "mercadopago";
 
 export type NavItem = {
   name: string;

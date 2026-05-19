@@ -35,6 +35,7 @@ interface OrderListProps {
 export default function OrderList({ orders, currentPage, totalCount, pageSize }: OrderListProps) {
   const router = useRouter();
   const [loadingOrderId, setLoadingOrderId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const totalPages = Math.ceil(totalCount / pageSize);
   const hasPrev = currentPage > 1;
@@ -42,11 +43,12 @@ export default function OrderList({ orders, currentPage, totalCount, pageSize }:
 
   const handleStatusChange = async (orderId: number, newStatus: OrderStatus) => {
     setLoadingOrderId(orderId);
+    setActionError(null);
     try {
       await updateOrderStatusAction({ orderId, status: newStatus });
       router.refresh();
     } catch (error: any) {
-      alert(`Error: ${error.message}`);
+      setActionError(error.message);
     } finally {
       setLoadingOrderId(null);
     }
@@ -62,6 +64,11 @@ export default function OrderList({ orders, currentPage, totalCount, pageSize }:
 
   return (
     <div>
+      {actionError && (
+        <div className="mb-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+          {actionError}
+        </div>
+      )}
       <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
           <thead className="bg-gray-50 dark:bg-gray-900/40">
