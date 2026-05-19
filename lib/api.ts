@@ -3,7 +3,7 @@ import axios from 'axios';
 import { createClient } from '@/lib/supabase/client';
 
 export const api = axios.create({
-  baseURL: typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL ?? '' : '',
+  baseURL: typeof window === 'undefined' ? process.env.NEXT_PUBLIC_APP_URL ?? '' : '',
   withCredentials: false,
 });
 

@@ -58,6 +58,15 @@ export async function GET(req: Request) {
       });
     }
 
+    // Reject states older than 10 minutes to limit replay window
+    const STATE_MAX_AGE_MS = 10 * 60 * 1000;
+    if (typeof t !== "number" || Date.now() - t > STATE_MAX_AGE_MS) {
+      return new Response(JSON.stringify({ error: "state expirado" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // 2️⃣ Validar sesión y propietario (usando Supabase)
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

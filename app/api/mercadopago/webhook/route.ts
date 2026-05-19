@@ -1,10 +1,10 @@
 export const runtime = 'nodejs';
 
-import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/prisma";
 import { corsHeaders } from "@/lib/authHelper";
 import { getValidMercadoPagoAccessToken } from "@/lib/mp-oauth";
+import { verifyMPSignature } from "@/lib/mp-webhook";
 
 /**
  * Webhook handler para MercadoPago
@@ -17,26 +17,6 @@ import { getValidMercadoPagoAccessToken } from "@/lib/mp-oauth";
  *
  * Nota: se recomienda implementar verificación de firma (HMAC) si lo habilitas desde MP.
  */
-
-function verifyMPSignature(
-  secret: string,
-  xSignature: string,
-  xRequestId: string,
-  dataId: string
-): boolean {
-  const tsPart = xSignature.split(",").find((p) => p.startsWith("ts="));
-  const v1Part = xSignature.split(",").find((p) => p.startsWith("v1="));
-  if (!tsPart || !v1Part) return false;
-  const ts = tsPart.slice(3);
-  const v1 = v1Part.slice(3);
-  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts}`;
-  const expected = crypto.createHmac("sha256", secret).update(manifest).digest("hex");
-  try {
-    return crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected));
-  } catch {
-    return false;
-  }
-}
 
 async function fetchPaymentFromMP(paymentId: string, token: string) {
   const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {

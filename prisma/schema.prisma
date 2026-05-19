@@ -12,8 +12,6 @@ datasource db {
 model Profile {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email      String   @unique
-  // Campos que probablemente quieras eliminar/manejar de otra forma si solo usas Supabase Auth:
-  password   String? // <-- Considera si esto pertenece aquí o solo en auth.profiles
   full_name  String?
   dni        String?
   role       Role     @default(CUSTOMER)
