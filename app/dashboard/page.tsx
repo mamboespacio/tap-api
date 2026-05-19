@@ -1,27 +1,27 @@
-"use server";
-
 import OrderList from "@/components/OrdersList";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import db from "@/lib/prisma";
 
-const prisma = db;
+const PAGE_SIZE = 15;
 
-export default async function VendorDashboardPage() {
+export default async function VendorDashboardPage({
+  searchParams,
+}: {
+  searchParams: { page?: string };
+}) {
   const supabase = await createClient();
   try {
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
     if (userError || !userData?.user?.id) {
-      // No hay usuario válido -> redirigir al login
       return redirect("/auth/login");
     }
 
     const user = userData.user;
 
-    // Cargar datos del Vendor y si tiene cuenta de MP asociada
-    const vendor = await prisma.vendor.findFirst({
+    const vendor = await db.vendor.findFirst({
       where: { owner_id: user.id },
       include: { mp_account: true },
     });
@@ -35,17 +35,23 @@ export default async function VendorDashboardPage() {
       );
     }
 
-    // Obtener las órdenes del vendedor (considerá paginación si hay muchas)
-    const orders = await prisma.order.findMany({
-      where: { vendor_id: vendor.id },
-      include: {
-        profile: { select: { full_name: true, email: true } },
-        products: {
-          include: { product: { select: { name: true, id: true } } },
+    const page = Math.max(1, Number(searchParams.page ?? 1));
+
+    const [orders, totalOrders] = await Promise.all([
+      db.order.findMany({
+        where: { vendor_id: vendor.id },
+        include: {
+          profile: { select: { full_name: true, email: true } },
+          products: {
+            include: { product: { select: { name: true, id: true } } },
+          },
         },
-      },
-      orderBy: { created_at: "desc" },
-    });
+        orderBy: { created_at: "desc" },
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+      }),
+      db.order.count({ where: { vendor_id: vendor.id } }),
+    ]);
 
     return (
       <div className="p-6">
@@ -75,12 +81,13 @@ export default async function VendorDashboardPage() {
         </section>
 
         <section className="mt-8">
-          {/* Aquí podrías mostrar sección de productos, etc. */}
-        </section>
-
-        <section className="mt-8">
           <h1 className="text-2xl font-bold mb-6">Gestión de Órdenes</h1>
-          <OrderList orders={orders} />
+          <OrderList
+            orders={orders}
+            currentPage={page}
+            totalCount={totalOrders}
+            pageSize={PAGE_SIZE}
+          />
         </section>
       </div>
     );
