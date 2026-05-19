@@ -11,8 +11,15 @@ const envSchema = z.object({
   MP_CLIENT_SECRET: z.string().min(1, "MP_CLIENT_SECRET is required"),
   OAUTH_STATE_SECRET: z.string().min(32, "OAUTH_STATE_SECRET must be at least 32 characters"),
   MP_REDIRECT_URI: z.string().url("MP_REDIRECT_URI must be a valid URL"),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
-  MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  // Optional vars: empty string in .env is treated as absent (same as not set)
+  SUPABASE_SERVICE_ROLE_KEY: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().min(1).optional(),
+  ),
+  MERCADOPAGO_WEBHOOK_SECRET:
+    process.env.NODE_ENV === "production"
+      ? z.string().min(1, "MERCADOPAGO_WEBHOOK_SECRET is required in production")
+      : z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
 });
 
 function validateEnv() {
