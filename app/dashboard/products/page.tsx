@@ -1,11 +1,11 @@
 // src/app/dashboard-vendor/products/page.tsx (Server Component, AJUSTADO)
 
-import { PrismaClient } from '@prisma/client';
 import ProductsList from "@/components/products/ProductsList";
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import db from "@/lib/prisma";
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 export default async function VendorProductsPage() {
   const supabase = await createClient();

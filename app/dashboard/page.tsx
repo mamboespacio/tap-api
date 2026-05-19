@@ -2,22 +2,11 @@
 
 import OrderList from "@/components/OrdersList";
 import { createClient } from "@/lib/supabase/server";
-import { PrismaClient } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import db from "@/lib/prisma";
 
-/**
- * Prisma singleton para evitar múltiples instancias en desarrollo.
- */
-declare global {
-  // eslint-disable-next-line no-var
-  var __prismaClient: PrismaClient | undefined;
-}
-const prisma: PrismaClient =
-  global.__prismaClient ?? new PrismaClient();
-if (process.env.NODE_ENV !== "production") {
-  global.__prismaClient = prisma;
-}
+const prisma = db;
 
 export default async function VendorDashboardPage() {
   const supabase = await createClient();

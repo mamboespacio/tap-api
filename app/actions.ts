@@ -1,9 +1,10 @@
 "use server";
 
-import { OrderStatus, PrismaClient, Role } from "@prisma/client";
+import { OrderStatus, Role } from "@prisma/client";
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
+import db from "@/lib/prisma";
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 // --- Tipos para Server Actions (sin cambios) ---
 interface VendorRegistrationData {

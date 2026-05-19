@@ -1,10 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { PrismaClient, Role } from "@prisma/client";
+import { Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import db from "@/lib/prisma";
 
-const prisma = new PrismaClient();
+const prisma = db;
 
 type ProductData = {
   id: number;

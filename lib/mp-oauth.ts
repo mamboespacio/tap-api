@@ -51,7 +51,7 @@ async function refreshMercadoPagoTokens(refresh_token: string, vendor_id: number
     refresh_token: refresh_token,
   });
 
-  const r = await fetch("api.mercadopago.com", {
+  const r = await fetch("https://api.mercadopago.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
